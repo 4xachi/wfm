@@ -1,0 +1,237 @@
+// FiberBlaze WFM — Production PostgreSQL 16/18 Handover Schema
+// Mirrors the zero-config local SQLite schema 1:1 for cloud deployment (WFM-CF milestone).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  TECHNICIAN
+  JOB_CONTROLLER
+  SUPERVISOR
+  ADMINISTRATOR
+}
+
+enum WorkflowType {
+  REPAIR
+  NEW_INSTALL
+  TRANSFER
+}
+
+enum WorkOrderStatus {
+  UNASSIGNED
+  ASSIGNED
+  WORKING
+  COMPLETED
+  FB_ISSUE
+  CUST_ISSUE
+  CANCELLED
+}
+
+enum NapPortStatus {
+  FREE
+  OCCUPIED
+  FAULTY
+  LOCKED_TRANSFER
+}
+
+enum DiscrepancyStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id             String             @id
+  employeeCode   String             @unique
+  email          String             @unique
+  fullName       String
+  role           Role
+  passwordHash   String
+  active         Boolean            @default(true)
+  sessionVersion Int                @default(1)
+  createdAt      DateTime           @default(now())
+  technician     TechnicianProfile?
+}
+
+model TechnicianProfile {
+  userId        String    @id
+  user          User      @relation(fields: [userId], references: [id])
+  vehicleType   String    // 'motorbike' | 'l300_van'
+  homeBarangay  String
+  phone         String
+  sessionActive Boolean   @default(false)
+  lastLat       Float?
+  lastLng       Float?
+  lastGpsAt     DateTime?
+  lastSpeedKmh  Float?
+}
+
+model Subscriber {
+  id               String   @id
+  accountNumber    String   @unique
+  fullName         String
+  phone            String
+  municipality     String
+  barangay         String
+  streetAddress    String
+  planName         String
+  lat              Float?
+  lng              Float?
+  coordsVerified   Boolean  @default(false)
+  activeNapBoxId   String?
+  activePortNumber Int?
+  onuSerial        String?
+  fiberTag         String?
+  lastOpticalDbm   Float?
+}
+
+model NapBox {
+  id           String    @id
+  code         String    @unique
+  municipality String
+  barangay     String
+  lat          Float
+  lng          Float
+  totalPorts   Int
+  oltCode      String
+  coordsVerified Boolean @default(true)
+  ports        NapPort[]
+}
+
+model NapPort {
+  napBoxId     String
+  portNumber   Int
+  status       NapPortStatus @default(FREE)
+  subscriberId String?
+  fiberTag     String?
+  lockedByWoId String?
+  updatedAt    DateTime      @default(now())
+  napBox       NapBox        @relation(fields: [napBoxId], references: [id])
+
+  @@id([napBoxId, portNumber])
+  @@index([status])
+}
+
+model WorkOrder {
+  id                       String          @id
+  ticketNumber             String          @unique
+  workflowType             WorkflowType
+  status                   WorkOrderStatus
+  priority                 String          // 'NORMAL' | 'HIGH' | 'URGENT'
+  subscriberId             String
+  assignedTechId           String?
+  sourceChannel            String          // 'EXCEL_BATCH' | 'DIGITAL_INTAKE' | 'SEED'
+  summaryTitle             String
+  issueDescription         String
+  targetLat                Float
+  targetLng                Float
+  targetMunicipality       String
+  targetBarangay           String
+  targetAddress            String
+  oldAddress               String?
+  oldLat                   Float?
+  oldLng                   Float?
+  oldNapBoxId              String?
+  oldPortNumber            Int?
+  assignedNapBoxId         String?
+  assignedPortNumber       Int?
+  fiberTag                 String?
+  onuSerial                String?
+  opticalRxDbm             Float?
+  opticalSignalBand        String?
+  supervisorReviewRequired Boolean         @default(false)
+  supervisorReviewedAt     DateTime?
+  supervisorReviewedBy     String?
+  exceptionReasonCode      String?
+  exceptionNotes           String?
+  resolutionNotes          String?
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+  startedAt                DateTime?
+  completedAt              DateTime?
+
+  @@index([assignedTechId, status])
+  @@index([subscriberId])
+}
+
+model LocationDiscrepancy {
+  id            String            @id
+  workOrderId   String
+  subscriberId  String
+  capturedById  String
+  recordedLat   Float
+  recordedLng   Float
+  capturedLat   Float
+  capturedLng   Float
+  distanceMeters Float
+  status        DiscrepancyStatus @default(PENDING)
+  reviewedById  String?
+  reviewNotes   String?
+  createdAt     DateTime          @default(now())
+  reviewedAt    DateTime?
+
+  @@index([status])
+}
+
+model FieldEvidence {
+  id          String   @id
+  workOrderId String
+  uploadedBy  String
+  kind        String   // 'CAMERA_NAP' | 'CAMERA_OPTICAL' | 'CAMERA_ONU' | 'SUBSCRIBER_SIGNATURE' | 'SIGNED_HARDCOPY'
+  captureMode String   // 'WEBRTC_CAMERA' | 'SIMULATED_FTTH_FEED' | 'SIGNATURE_PAD' | 'BETA_HARDCOPY_SCAN'
+  filePath    String
+  mimeType    String
+  sha256      String
+  capturedLat Float?
+  capturedLng Float?
+  watermark   String
+  createdAt   DateTime @default(now())
+
+  @@index([workOrderId])
+}
+
+model SyncReceipt {
+  idempotencyKey String   @id
+  actorUserId    String
+  endpoint       String
+  workOrderId    String
+  responseStatus Int
+  responseJson   String
+  createdAt      DateTime @default(now())
+
+  @@index([actorUserId, endpoint, workOrderId])
+}
+
+model IntegrationOutbox {
+  id           String   @id
+  workOrderId  String
+  targetSystem String   // 'CRM_BILLING' | 'OLT_PROVISIONING' | 'NAP_INVENTORY'
+  eventType    String
+  payloadJson  String
+  gateStatus   String   // 'GATED_DRY_RUN'
+  createdAt    DateTime @default(now())
+
+  @@index([workOrderId])
+}
+
+model AuditLog {
+  seq        Int      @id @default(autoincrement())
+  id         String   @unique
+  actorId    String
+  actorRole  Role
+  action     String
+  entityType String
+  entityId   String
+  detailJson String
+  prevHash   String
+  entryHash  String
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
