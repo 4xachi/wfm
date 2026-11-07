@@ -1096,6 +1096,7 @@ function buildOfflineCandidates(
 }
 
 const routeCache = new Map<string, CandidateStreetRoute[]>();
+const inFlightRoutePromises = new Map<string, Promise<StreetRouteResult>>();
 
 /**
  * Calculates a multi-step Cavite 3D street route for FiberBlaze field vehicles.
@@ -1207,7 +1208,7 @@ export async function calculateStreetRoute(
     .filter((o) => o.type === 'block')
     .map((o) => `${o.lat.toFixed(4)},${o.lng.toFixed(4)}`)
     .join(';');
-  const cacheKey = `${origin.lat.toFixed(4)},${origin.lng.toFixed(4)}|${wpKey}|${target.lat.toFixed(4)},${target.lng.toFixed(4)}|${profileId}|${blocksKey}`;
+  const cacheKey = `${origin.lat.toFixed(4)},${origin.lng.toFixed(4)}|${wpKey}|${target.lat.toFixed(4)},${target.lng.toFixed(4)}|${profileId}|${blocksKey}|${optimizationMode}`;
 
   if (!options.fetchImpl && routeCache.has(cacheKey)) {
     const cached = routeCache.get(cacheKey);
@@ -1224,100 +1225,112 @@ export async function calculateStreetRoute(
     }
   }
 
-  const waypoints: LatLng[] = [origin];
-  if (waypoint) waypoints.push(waypoint);
-  waypoints.push(target);
+  if (!options.fetchImpl && inFlightRoutePromises.has(cacheKey)) {
+    return inFlightRoutePromises.get(cacheKey)!;
+  }
 
-  const [valhallaRes, osrmRes] = await Promise.allSettled([
-    fetchValhallaCandidates(
-      waypoints,
-      profile,
-      optimizationMode,
-      fetchFn,
-      obstacles,
-      timeoutMs
-    ),
-    fetchOsrmCandidates(waypoints, profile, fetchFn, obstacles, timeoutMs),
-  ]);
+  const computePromise = (async (): Promise<StreetRouteResult> => {
+    const waypoints: LatLng[] = [origin];
+    if (waypoint) waypoints.push(waypoint);
+    waypoints.push(target);
 
-  const rawCandidates: CandidateStreetRoute[] = [
-    ...(valhallaRes.status === 'fulfilled' ? valhallaRes.value : []),
-    ...(osrmRes.status === 'fulfilled' ? osrmRes.value : []),
-  ];
-
-  const hitBlock = rawCandidates
-    .flatMap((c) => c.matchedObstacles)
-    .find((o) => o.type === 'block');
-
-  if (hitBlock && !waypoint) {
-    const detourLeft = clampToCaviteBounds(
-      computeAvoidanceWaypoint(origin, target, hitBlock, 280, 1)
-    );
-    const detourRight = clampToCaviteBounds(
-      computeAvoidanceWaypoint(origin, target, hitBlock, 280, -1)
-    );
-    const [detourLRes, detourRRes] = await Promise.allSettled([
-      fetchOsrmCandidates(
-        [origin, detourLeft, target],
+    const [valhallaRes, osrmRes] = await Promise.allSettled([
+      fetchValhallaCandidates(
+        waypoints,
         profile,
+        optimizationMode,
         fetchFn,
         obstacles,
         timeoutMs
       ),
-      fetchOsrmCandidates(
-        [origin, detourRight, target],
-        profile,
-        fetchFn,
-        obstacles,
-        timeoutMs
-      ),
+      fetchOsrmCandidates(waypoints, profile, fetchFn, obstacles, timeoutMs),
     ]);
-    for (const res of [detourLRes, detourRRes]) {
-      if (res.status === 'fulfilled') {
-        for (const cand of res.value) {
-          if (!cand.isBlocked) {
-            rawCandidates.push({
-              ...cand,
-              isDetour: true,
-              engineName: `${cand.engineName} (Obstacle Detour)`,
-            });
+
+    const rawCandidates: CandidateStreetRoute[] = [
+      ...(valhallaRes.status === 'fulfilled' ? valhallaRes.value : []),
+      ...(osrmRes.status === 'fulfilled' ? osrmRes.value : []),
+    ];
+
+    const hitBlock = rawCandidates
+      .flatMap((c) => c.matchedObstacles)
+      .find((o) => o.type === 'block');
+
+    if (hitBlock && !waypoint) {
+      const detourLeft = clampToCaviteBounds(
+        computeAvoidanceWaypoint(origin, target, hitBlock, 280, 1)
+      );
+      const detourRight = clampToCaviteBounds(
+        computeAvoidanceWaypoint(origin, target, hitBlock, 280, -1)
+      );
+      const [detourLRes, detourRRes] = await Promise.allSettled([
+        fetchOsrmCandidates(
+          [origin, detourLeft, target],
+          profile,
+          fetchFn,
+          obstacles,
+          timeoutMs
+        ),
+        fetchOsrmCandidates(
+          [origin, detourRight, target],
+          profile,
+          fetchFn,
+          obstacles,
+          timeoutMs
+        ),
+      ]);
+      for (const res of [detourLRes, detourRRes]) {
+        if (res.status === 'fulfilled') {
+          for (const cand of res.value) {
+            if (!cand.isBlocked) {
+              rawCandidates.push({
+                ...cand,
+                isDetour: true,
+                engineName: `${cand.engineName} (Obstacle Detour)`,
+              });
+            }
           }
         }
       }
     }
+
+    // Always guarantee an unblocked Cavite street route if external APIs failed or were all blocked
+    const hasUnblockedExternal = rawCandidates.some((c) => !c.isBlocked);
+    if (!hasUnblockedExternal) {
+      rawCandidates.push(
+        ...buildOfflineCandidates(
+          origin,
+          target,
+          profileId,
+          optimizationMode,
+          obstacles,
+          waypoint
+        )
+      );
+    }
+
+    const ranked = rankAndDeduplicateRoutes(rawCandidates, optimizationMode);
+    if (!options.fetchImpl && rawCandidates.length > 0) {
+      if (routeCache.size > 80) routeCache.clear();
+      routeCache.set(cacheKey, rawCandidates);
+    }
+
+    const primary = ranked[0];
+    return {
+      ...primary,
+      optimizationMode,
+      allRoutes: ranked,
+      alternatives: ranked.slice(1),
+    };
+  })();
+
+  if (!options.fetchImpl) {
+    inFlightRoutePromises.set(cacheKey, computePromise);
+    computePromise.finally(() => {
+      inFlightRoutePromises.delete(cacheKey);
+    });
   }
 
-  // Always guarantee an unblocked Cavite street route if external APIs failed or were all blocked
-  const hasUnblockedExternal = rawCandidates.some((c) => !c.isBlocked);
-  if (!hasUnblockedExternal) {
-    rawCandidates.push(
-      ...buildOfflineCandidates(
-        origin,
-        target,
-        profileId,
-        optimizationMode,
-        obstacles,
-        waypoint
-      )
-    );
-  }
-
-  const ranked = rankAndDeduplicateRoutes(rawCandidates, optimizationMode);
-  if (
-    !options.fetchImpl &&
-    rawCandidates.some((c) => c.sourceEngine !== 'CaviteOfflineGraph')
-  ) {
-    if (routeCache.size > 40) routeCache.clear();
-    routeCache.set(cacheKey, rawCandidates);
-  }
-
-  const primary = ranked[0];
-  return {
-    ...primary,
-    optimizationMode,
-    allRoutes: ranked,
-    alternatives: ranked.slice(1),
-  };
+  return computePromise;
 }
 
 /**

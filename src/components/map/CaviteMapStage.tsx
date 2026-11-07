@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import {
   Play,
@@ -85,12 +85,19 @@ export function CaviteMapStage({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const mapLoadedRef = useRef(false);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const napMarkersMapRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const woMarkersMapRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const techMarkersMapRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const diffMarkersRef = useRef<maplibregl.Marker[]>([]);
   const navMarkerRef = useRef<maplibregl.Marker | null>(null);
   const navArrowElRef = useRef<HTMLDivElement | null>(null);
   const navControllerRef = useRef<NavigationController | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const lastFrameTimeRef = useRef<number>(0);
   const lastPingSentMsRef = useRef<number>(0);
+  const lastCameraUpdateRef = useRef<number>(0);
+  const lastCrumbUpdateRef = useRef<number>(0);
+  const initialPitchAppliedRef = useRef(false);
   const breadcrumbsRef = useRef<Array<[number, number]>>([]);
 
   const [camera3D, setCamera3D] = useState(true);
@@ -117,15 +124,15 @@ export function CaviteMapStage({
   onTelemetryPingRef.current = onTelemetryPing;
   const lastHudUpdateRef = useRef(0);
   const prevInstructionRef = useRef('');
-  const [hudInstruction, setHudInstruction] = useState(
-    'Calculating fastest Cavite street route…',
-  );
-  const [hudStreet, setHudStreet] = useState('OpenFreeMap 3D • Cavite Graph');
-  const [hudDistMeters, setHudDistMeters] = useState(0);
-  const [hudModifier, setHudModifier] = useState('straight');
-  const [snapConfidence, setSnapConfidence] = useState(98);
-  const [liveSpeedKmh, setLiveSpeedKmh] = useState(0);
-  const [remainingEtaSec, setRemainingEtaSec] = useState(0);
+  const [hud, setHud] = useState({
+    instruction: 'Calculating fastest Cavite street route…',
+    street: 'OpenFreeMap 3D • Cavite Graph',
+    distMeters: 0,
+    modifier: 'straight',
+    confidence: 98,
+    speedKmh: 0,
+    etaSec: 0,
+  });
 
   const stopDrivingLoop = useCallback(() => {
     if (animFrameRef.current !== null) {
@@ -136,7 +143,7 @@ export function CaviteMapStage({
   }, []);
 
   // Resolve route origin and destination based on active mode
-  const resolveEndpoints = useCallback((): {
+  const resolvedEndpoints = useMemo((): {
     origin: LatLng;
     target: LatLng;
   } | null => {
@@ -317,6 +324,25 @@ export function CaviteMapStage({
       pitch: 50,
       maxPitch: 56,
       bearing: 0,
+      fadeDuration: 0,
+      canvasContextAttributes: { preserveDrawingBuffer: false },
+      trackResize: true,
+      renderWorldCopies: false,
+      maxTileCacheSize: 40,
+    });
+
+    map.setMissingStyleImageResolver((id: string) => {
+      try {
+        if (!map.hasImage(id)) {
+          map.addImage(id, {
+            width: 1,
+            height: 1,
+            data: new Uint8Array(4),
+          });
+        }
+      } catch {
+        // Silently ignore benign sprite lookup
+      }
     });
 
     map.addControl(
@@ -343,7 +369,8 @@ export function CaviteMapStage({
             type: 'fill-extrusion',
             source: vecSource,
             'source-layer': 'building',
-            minzoom: 15.2,
+            minzoom: 15.6,
+            maxzoom: 19.5,
             paint: {
               'fill-extrusion-height': [
                 'max',
@@ -480,6 +507,14 @@ export function CaviteMapStage({
       navMarkerRef.current = null;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
+      napMarkersMapRef.current.forEach((m) => m.remove());
+      napMarkersMapRef.current.clear();
+      woMarkersMapRef.current.forEach((m) => m.remove());
+      woMarkersMapRef.current.clear();
+      techMarkersMapRef.current.forEach((m) => m.remove());
+      techMarkersMapRef.current.clear();
+      diffMarkersRef.current.forEach((m) => m.remove());
+      diffMarkersRef.current = [];
       mapLoadedRef.current = false;
       map.remove();
       mapRef.current = null;
@@ -527,7 +562,11 @@ export function CaviteMapStage({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    map.easeTo({ pitch: camera3D ? 50 : 0, duration: 320 });
+    if (initialPitchAppliedRef.current) {
+      map.easeTo({ pitch: camera3D ? 50 : 0, duration: 250 });
+    } else {
+      initialPitchAppliedRef.current = true;
+    }
     if (mapLoadedRef.current && map.getLayer('fb-3d-buildings')) {
       map.setLayoutProperty(
         'fb-3d-buildings',
@@ -536,6 +575,10 @@ export function CaviteMapStage({
       );
     }
   }, [camera3D, buildings3D]);
+
+  const endpointCoordKey = resolvedEndpoints
+    ? `${resolvedEndpoints.origin.lat.toFixed(5)},${resolvedEndpoints.origin.lng.toFixed(5)}->${resolvedEndpoints.target.lat.toFixed(5)},${resolvedEndpoints.target.lng.toFixed(5)}|${vehicleProfile}|${offlineMode}|${userBlocks.map((b) => b.id).join(';')}`
+    : 'none';
 
   // Compute Cavite Street Route whenever endpoints, profile, offlineMode, or userBlocks change
   useEffect(() => {
@@ -573,8 +616,7 @@ export function CaviteMapStage({
       return;
     }
 
-    const endpoints = resolveEndpoints();
-    if (!endpoints) {
+    if (!resolvedEndpoints) {
       setRouteResult(null);
       return;
     }
@@ -582,8 +624,8 @@ export function CaviteMapStage({
     let cancelled = false;
     (async () => {
       const route = await calculateStreetRoute(
-        endpoints.origin,
-        endpoints.target,
+        resolvedEndpoints.origin,
+        resolvedEndpoints.target,
         {
           profile: vehicleProfile,
           optimizationMode: 'fastest',
@@ -596,40 +638,38 @@ export function CaviteMapStage({
 
       setRouteResult(route);
       const step0 = route.steps[0];
-      setHudInstruction(
-        step0?.instruction ?? 'Proceed along Cavite primary street route',
-      );
-      setHudStreet(
-        `Current street: ${step0?.streetName || 'Cavite Arterial'} • ${route.engineName}`,
-      );
-      setHudDistMeters(step0?.distanceMeters ?? route.distanceMeters);
-      setHudModifier(step0?.maneuverModifier || 'straight');
-      setRemainingEtaSec(route.durationSeconds);
+      setHud({
+        instruction: step0?.instruction ?? 'Proceed along Cavite primary street route',
+        street: `Current street: ${step0?.streetName || 'Cavite Arterial'} • ${route.engineName}`,
+        distMeters: step0?.distanceMeters ?? route.distanceMeters,
+        modifier: step0?.maneuverModifier || 'straight',
+        confidence: 98,
+        speedKmh: 0,
+        etaSec: route.durationSeconds,
+      });
 
       if (!navControllerRef.current) {
         navControllerRef.current = new NavigationController({
           onFrame: (frame: NavigationFrame) => {
             const now = performance.now();
             if (
-              now - lastHudUpdateRef.current > 200 ||
+              now - lastHudUpdateRef.current > 250 ||
               frame.currentStep.instruction !== prevInstructionRef.current
             ) {
               lastHudUpdateRef.current = now;
               prevInstructionRef.current = frame.currentStep.instruction;
-              setHudInstruction(frame.currentStep.instruction);
-              setHudStreet(
-                `Current street: ${frame.currentStep.streetName || 'Local street'}`,
-              );
-              setHudDistMeters(
-                Math.round(
+              setHud({
+                instruction: frame.currentStep.instruction,
+                street: `Current street: ${frame.currentStep.streetName || 'Local street'}`,
+                distMeters: Math.round(
                   frame.distanceToNextManeuverMeters ||
                     frame.remainingDistanceMeters,
                 ),
-              );
-              setHudModifier(frame.currentStep.maneuverModifier || 'straight');
-              setSnapConfidence(frame.confidencePercent);
-              setLiveSpeedKmh(frame.speedKmh);
-              setRemainingEtaSec(frame.remainingDurationSeconds);
+                modifier: frame.currentStep.maneuverModifier || 'straight',
+                confidence: frame.confidencePercent,
+                speedKmh: frame.speedKmh,
+                etaSec: frame.remainingDurationSeconds,
+              });
             }
 
             navMarkerRef.current?.setLngLat([
@@ -641,22 +681,25 @@ export function CaviteMapStage({
             }
 
             if (frame.newGpsPing) {
-              breadcrumbsRef.current = [
-                ...breadcrumbsRef.current.slice(-22),
-                [frame.rawPoint.lng, frame.rawPoint.lat],
-              ];
-              if (mapRef.current) {
-                const src = mapRef.current.getSource(
-                  'fb-gps-crumbs',
-                ) as maplibregl.GeoJSONSource | undefined;
-                src?.setData({
-                  type: 'FeatureCollection',
-                  features: breadcrumbsRef.current.map(([lng, lat]) => ({
-                    type: 'Feature',
-                    properties: {},
-                    geometry: { type: 'Point', coordinates: [lng, lat] },
-                  })),
-                });
+              if (now - lastCrumbUpdateRef.current >= 350) {
+                lastCrumbUpdateRef.current = now;
+                breadcrumbsRef.current = [
+                  ...breadcrumbsRef.current.slice(-22),
+                  [frame.rawPoint.lng, frame.rawPoint.lat],
+                ];
+                if (mapRef.current) {
+                  const src = mapRef.current.getSource(
+                    'fb-gps-crumbs',
+                  ) as maplibregl.GeoJSONSource | undefined;
+                  src?.setData({
+                    type: 'FeatureCollection',
+                    features: breadcrumbsRef.current.map(([lng, lat]) => ({
+                      type: 'Feature',
+                      properties: {},
+                      geometry: { type: 'Point', coordinates: [lng, lat] },
+                    })),
+                  });
+                }
               }
 
               const nowMs = Date.now();
@@ -673,18 +716,22 @@ export function CaviteMapStage({
               }
             }
 
-            if (mapRef.current && camera3DRef.current) {
+            if (mapRef.current && camera3DRef.current && now - lastCameraUpdateRef.current >= 32) {
+              lastCameraUpdateRef.current = now;
               mapRef.current.jumpTo({
                 center: frame.camera.center,
                 bearing: frame.camera.bearing,
-                pitch: 52,
+                pitch: 50,
                 zoom: Math.min(18.2, frame.camera.zoom),
               });
             }
 
             if (frame.arrived) {
               stopDrivingLoop();
-              setHudInstruction('Arrived at subscriber FTTH service location');
+              setHud((prev) => ({
+                ...prev,
+                instruction: 'Arrived at subscriber FTTH service location',
+              }));
             }
           },
         });
@@ -711,7 +758,8 @@ export function CaviteMapStage({
   }, [
     mode,
     selectedDiscrepancy,
-    resolveEndpoints,
+    endpointCoordKey,
+    resolvedEndpoints,
     vehicleProfile,
     offlineMode,
     userBlocks,
@@ -719,28 +767,50 @@ export function CaviteMapStage({
     syncGeoJsonLayers,
   ]);
 
-  // Render NAP Boxes, Work Orders, Fleet Technicians, or Discrepancy Pins
+  // Render NAP Boxes, Work Orders, Fleet Technicians, or Discrepancy Pins with Pooled Markers
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    markersRef.current.forEach((m) => m.remove());
-    markersRef.current = [];
-
     // 1. NAP Split-Boxes
+    const currentNapIds = new Set<string>();
     for (const nap of napBoxes) {
+      currentNapIds.add(nap.id);
       const freeCount = nap.ports.filter((p) => p.status === 'FREE').length;
-      const el = document.createElement('div');
-      el.className = 'fb-nap-marker';
-      el.textContent = `${nap.code} (${freeCount}/${nap.totalPorts})`;
-      el.title = `${nap.code} • ${nap.municipality} ${nap.barangay} • ${freeCount} free ports`;
-      const m = new maplibregl.Marker({ element: el })
-        .setLngLat([nap.lng, nap.lat])
-        .addTo(map);
-      markersRef.current.push(m);
+      const text = `${nap.code} (${freeCount}/${nap.totalPorts})`;
+      const title = `${nap.code} • ${nap.municipality} ${nap.barangay} • ${freeCount} free ports`;
+      const existing = napMarkersMapRef.current.get(nap.id);
+      if (existing) {
+        const el = existing.getElement();
+        if (el.textContent !== text) el.textContent = text;
+        if (el.title !== title) el.title = title;
+      } else {
+        const el = document.createElement('div');
+        el.className = 'fb-nap-marker';
+        el.textContent = text;
+        el.title = title;
+        const m = new maplibregl.Marker({ element: el })
+          .setLngLat([nap.lng, nap.lat])
+          .addTo(map);
+        napMarkersMapRef.current.set(nap.id, m);
+      }
+    }
+    for (const [id, marker] of napMarkersMapRef.current.entries()) {
+      if (!currentNapIds.has(id)) {
+        marker.remove();
+        napMarkersMapRef.current.delete(id);
+      }
     }
 
+    // 2. Discrepancy Diff Pins
+    diffMarkersRef.current.forEach((m) => m.remove());
+    diffMarkersRef.current = [];
     if (mode === 'supervisor-diff' && selectedDiscrepancy) {
+      woMarkersMapRef.current.forEach((m) => m.remove());
+      woMarkersMapRef.current.clear();
+      techMarkersMapRef.current.forEach((m) => m.remove());
+      techMarkersMapRef.current.clear();
+
       const recEl = document.createElement('div');
       recEl.className = 'fb-sub-pin';
       recEl.style.backgroundColor = '#0284c7';
@@ -763,7 +833,7 @@ export function CaviteMapStage({
       capSpan.textContent = 'NEW';
       capEl.appendChild(capSpan);
 
-      markersRef.current.push(
+      diffMarkersRef.current.push(
         new maplibregl.Marker({ element: recEl })
           .setLngLat([
             selectedDiscrepancy.recordedLng,
@@ -780,7 +850,7 @@ export function CaviteMapStage({
       return;
     }
 
-    // 2. Work Order Subscriber Pins
+    // 3. Work Order Subscriber Pins
     const ordersToPlot =
       mode === 'ops-fleet'
         ? workOrders
@@ -788,13 +858,11 @@ export function CaviteMapStage({
           ? [selectedWorkOrder]
           : [];
 
+    const currentWoIds = new Set<string>();
     for (const wo of ordersToPlot) {
+      currentWoIds.add(wo.id);
       const isSelected = selectedWorkOrder?.id === wo.id;
-      const el = document.createElement('button');
-      el.type = 'button';
-      el.className = 'fb-sub-pin';
-      el.setAttribute('aria-label', `Work order ${wo.ticketNumber}`);
-      el.style.backgroundColor =
+      const color =
         wo.status === 'FB_ISSUE'
           ? '#ef4444'
           : wo.status === 'CUST_ISSUE'
@@ -802,47 +870,82 @@ export function CaviteMapStage({
             : wo.status === 'COMPLETED'
               ? '#10b981'
               : '#f97316';
-      if (isSelected) {
-        el.style.transform = 'scale(1.18)';
-      }
-      const woSpan = document.createElement('span');
-      woSpan.style.color = '#fff';
-      woSpan.style.fontSize = '10px';
-      woSpan.style.fontWeight = '800';
-      woSpan.textContent =
-        wo.workflowType === 'REPAIR'
-          ? 'R'
-          : wo.workflowType === 'TRANSFER'
-            ? 'T'
-            : 'I';
-      el.appendChild(woSpan);
-      el.onclick = (ev) => {
-        ev.stopPropagation();
-        onSelectWorkOrder?.(wo.id);
-      };
 
-      const m = new maplibregl.Marker({ element: el })
-        .setLngLat([wo.targetLng, wo.targetLat])
-        .addTo(map);
-      markersRef.current.push(m);
+      const existing = woMarkersMapRef.current.get(wo.id);
+      if (existing) {
+        existing.setLngLat([wo.targetLng, wo.targetLat]);
+        const el = existing.getElement();
+        el.style.backgroundColor = color;
+        el.style.transform = isSelected ? 'scale(1.18)' : 'scale(1)';
+      } else {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'fb-sub-pin';
+        el.setAttribute('aria-label', `Work order ${wo.ticketNumber}`);
+        el.style.backgroundColor = color;
+        if (isSelected) {
+          el.style.transform = 'scale(1.18)';
+        }
+        const woSpan = document.createElement('span');
+        woSpan.style.color = '#fff';
+        woSpan.style.fontSize = '10px';
+        woSpan.style.fontWeight = '800';
+        woSpan.textContent =
+          wo.workflowType === 'REPAIR'
+            ? 'R'
+            : wo.workflowType === 'TRANSFER'
+              ? 'T'
+              : 'I';
+        el.appendChild(woSpan);
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          onSelectWorkOrder?.(wo.id);
+        };
+
+        const m = new maplibregl.Marker({ element: el })
+          .setLngLat([wo.targetLng, wo.targetLat])
+          .addTo(map);
+        woMarkersMapRef.current.set(wo.id, m);
+      }
+    }
+    for (const [id, marker] of woMarkersMapRef.current.entries()) {
+      if (!currentWoIds.has(id)) {
+        marker.remove();
+        woMarkersMapRef.current.delete(id);
+      }
     }
 
-    // 3. Fleet Technicians (ops-fleet) vs Active Navigation Puck (tech-navigation)
+    // 4. Fleet Technicians (ops-fleet) vs Active Navigation Puck (tech-navigation)
     if (mode === 'ops-fleet') {
       navMarkerRef.current?.remove();
       navMarkerRef.current = null;
+      const currentTechIds = new Set<string>();
       for (const tech of technicians) {
         if (tech.lastLat === null || tech.lastLng === null) continue;
-        const el = document.createElement('div');
-        el.className = 'fb-tech-puck';
-        el.title = `${tech.fullName} (${tech.gpsFreshness})`;
-        el.innerHTML = buildTechPuckSvg(tech.vehicleType, tech.gpsFreshness);
-        const m = new maplibregl.Marker({ element: el })
-          .setLngLat([tech.lastLng, tech.lastLat])
-          .addTo(map);
-        markersRef.current.push(m);
+        currentTechIds.add(tech.userId);
+        const existing = techMarkersMapRef.current.get(tech.userId);
+        if (existing) {
+          existing.setLngLat([tech.lastLng, tech.lastLat]);
+        } else {
+          const el = document.createElement('div');
+          el.className = 'fb-tech-puck';
+          el.title = `${tech.fullName} (${tech.gpsFreshness})`;
+          el.innerHTML = buildTechPuckSvg(tech.vehicleType, tech.gpsFreshness);
+          const m = new maplibregl.Marker({ element: el })
+            .setLngLat([tech.lastLng, tech.lastLat])
+            .addTo(map);
+          techMarkersMapRef.current.set(tech.userId, m);
+        }
+      }
+      for (const [id, marker] of techMarkersMapRef.current.entries()) {
+        if (!currentTechIds.has(id)) {
+          marker.remove();
+          techMarkersMapRef.current.delete(id);
+        }
       }
     } else if (mode === 'tech-navigation') {
+      techMarkersMapRef.current.forEach((m) => m.remove());
+      techMarkersMapRef.current.clear();
       if (!navMarkerRef.current) {
         const wrapper = document.createElement('div');
         wrapper.className = 'fb-tech-puck';
@@ -944,9 +1047,9 @@ export function CaviteMapStage({
     });
   }
 
-  const TurnIcon = hudModifier.includes('left')
+  const TurnIcon = hud.modifier.includes('left')
     ? CornerUpLeft
-    : hudModifier.includes('right')
+    : hud.modifier.includes('right')
       ? CornerUpRight
       : ArrowUp;
 
@@ -982,17 +1085,17 @@ export function CaviteMapStage({
           <div className="truncate text-sm font-semibold">
             {mode === 'supervisor-diff' && selectedDiscrepancy
               ? `GPS Pin Delta: ${selectedDiscrepancy.distanceMeters.toFixed(1)} m`
-              : hudInstruction}
+              : hud.instruction}
           </div>
           <div className="truncate text-xs text-slate-300">
             {mode === 'supervisor-diff' && selectedDiscrepancy
               ? `${selectedDiscrepancy.ticketNumber} • Blue = Trusted • Orange = Field`
-              : hudStreet}
+              : hud.street}
           </div>
         </div>
         {mode !== 'supervisor-diff' && (
           <div className="font-mono-tabular shrink-0 text-base font-bold text-white">
-            {formatMeters(hudDistMeters)}
+            {formatMeters(hud.distMeters)}
           </div>
         )}
       </div>
@@ -1087,10 +1190,10 @@ export function CaviteMapStage({
           </span>
           {routeResult && mode !== 'supervisor-diff' && (
             <span className="font-mono-tabular text-amber-300">
-              ETA {formatDuration(remainingEtaSec)} •{' '}
+              ETA {formatDuration(hud.etaSec)} •{' '}
               {formatMeters(routeResult.distanceMeters)}
               {mode === 'tech-navigation'
-                ? ` • ${liveSpeedKmh} km/h • HMM ${snapConfidence}%`
+                ? ` • ${hud.speedKmh} km/h • HMM ${hud.confidence}%`
                 : ''}
             </span>
           )}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   CheckCircle2,
@@ -81,6 +81,7 @@ export function TechMobileCockpit({
 
   const [startingJobId, setStartingJobId] = useState<string | null>(null);
   const [submittingOutcome, setSubmittingOutcome] = useState(false);
+  const sseDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshQueueList = useCallback(async () => {
     const list = await listQueuedMutations();
@@ -149,7 +150,7 @@ export function TechMobileCockpit({
       void refreshQueueList();
       if (!offline && user) void refreshBootstrap();
     });
-  }, [refreshBootstrap, refreshQueueList, user]);
+  }, [refreshBootstrap, refreshQueueList, user?.id]);
 
   useEffect(() => {
     if (!user || deadZone || typeof EventSource === 'undefined') return;
@@ -159,13 +160,20 @@ export function TechMobileCockpit({
     es.onmessage = (evt) => {
       try {
         const parsed = JSON.parse(evt.data) as { type?: string };
-        if (parsed.type && parsed.type !== 'CONNECTED') void refreshBootstrap();
+        if (parsed.type === 'CONNECTED') return;
       } catch {
-        void refreshBootstrap();
+        // Fall through to debounced refresh
       }
+      if (sseDebounceTimerRef.current) clearTimeout(sseDebounceTimerRef.current);
+      sseDebounceTimerRef.current = setTimeout(() => {
+        void refreshBootstrap();
+      }, 300);
     };
-    return () => es.close();
-  }, [user, deadZone, refreshBootstrap]);
+    return () => {
+      if (sseDebounceTimerRef.current) clearTimeout(sseDebounceTimerRef.current);
+      es.close();
+    };
+  }, [user?.id, deadZone, refreshBootstrap]);
 
   const effectiveWorkOrders = useMemo(() => {
     const chronological = [...queuedMutations]

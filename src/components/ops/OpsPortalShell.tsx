@@ -140,7 +140,7 @@ export function OpsPortalShell({
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
       refreshTimerRef.current = setTimeout(() => {
         void refreshBootstrap();
-      }, 120);
+      }, 300);
     };
     es.onerror = () => setSseLive(false);
 
@@ -149,7 +149,7 @@ export function OpsPortalShell({
       es.close();
       setSseLive(false);
     };
-  }, [user, refreshBootstrap]);
+  }, [user?.id, user?.role, refreshBootstrap]);
 
   async function handleRoleSwitch(targetEmail: string) {
     if (!targetEmail || targetEmail === user?.email) return;
