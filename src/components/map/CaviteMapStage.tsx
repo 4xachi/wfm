@@ -99,9 +99,16 @@ export function CaviteMapStage({
   const lastCrumbUpdateRef = useRef<number>(0);
   const initialPitchAppliedRef = useRef(false);
   const breadcrumbsRef = useRef<Array<[number, number]>>([]);
+  const lastGeoJsonDataRef = useRef<{
+    primary?: string;
+    alt?: string;
+    obs?: string;
+    crumbs?: string;
+    diff?: string;
+  }>({});
 
-  const [camera3D, setCamera3D] = useState(true);
-  const [buildings3D, setBuildings3D] = useState(true);
+  const [camera3D, setCamera3D] = useState(mode !== 'ops-fleet');
+  const [buildings3D, setBuildings3D] = useState(mode !== 'ops-fleet');
   const [clickAction, setClickAction] = useState<'origin' | 'pin' | 'block'>(
     mode === 'tech-navigation' ? 'block' : 'pin',
   );
@@ -199,7 +206,7 @@ export function CaviteMapStage({
     navOrigin,
   ]);
 
-  // Sync GeoJSON sources onto loaded MapLibre style
+  // Sync GeoJSON sources onto loaded MapLibre style with deduplicated setData
   const syncGeoJsonLayers = useCallback(
     (
       map: maplibregl.Map,
@@ -213,93 +220,124 @@ export function CaviteMapStage({
         'fb-primary-route',
       ) as maplibregl.GeoJSONSource | undefined;
       if (primarySrc) {
-        primarySrc.setData({
-          type: 'FeatureCollection',
-          features:
-            activeRoute && activeRoute.coordinates.length >= 2
-              ? [
-                  {
-                    type: 'Feature',
-                    properties: {},
-                    geometry: {
-                      type: 'LineString',
-                      coordinates: activeRoute.coordinates,
+        const primaryKey =
+          activeRoute && activeRoute.coordinates.length >= 2
+            ? `${activeRoute.coordinates.length}:${activeRoute.coordinates[0]?.[0].toFixed(5)},${activeRoute.coordinates[0]?.[1].toFixed(5)}->${activeRoute.coordinates[activeRoute.coordinates.length - 1]?.[0].toFixed(5)},${activeRoute.coordinates[activeRoute.coordinates.length - 1]?.[1].toFixed(5)}`
+            : 'empty';
+        if (lastGeoJsonDataRef.current.primary !== primaryKey) {
+          lastGeoJsonDataRef.current.primary = primaryKey;
+          primarySrc.setData({
+            type: 'FeatureCollection',
+            features:
+              activeRoute && activeRoute.coordinates.length >= 2
+                ? [
+                    {
+                      type: 'Feature',
+                      properties: {},
+                      geometry: {
+                        type: 'LineString',
+                        coordinates: activeRoute.coordinates,
+                      },
                     },
-                  },
-                ]
-              : [],
-        });
+                  ]
+                : [],
+          });
+        }
       }
 
       const altSrc = map.getSource(
         'fb-alt-routes',
       ) as maplibregl.GeoJSONSource | undefined;
       if (altSrc) {
-        altSrc.setData({
-          type: 'FeatureCollection',
-          features: (activeRoute?.alternatives ?? []).map((alt, idx) => ({
-            type: 'Feature',
-            properties: { routeIndex: idx + 1 },
-            geometry: {
-              type: 'LineString',
-              coordinates: alt.coordinates,
-            },
-          })),
-        });
+        const altKey = (activeRoute?.alternatives ?? [])
+          .map((a) => `${a.coordinates.length}:${a.distanceMeters.toFixed(1)}`)
+          .join(';');
+        if (lastGeoJsonDataRef.current.alt !== altKey) {
+          lastGeoJsonDataRef.current.alt = altKey;
+          altSrc.setData({
+            type: 'FeatureCollection',
+            features: (activeRoute?.alternatives ?? []).map((alt, idx) => ({
+              type: 'Feature',
+              properties: { routeIndex: idx + 1 },
+              geometry: {
+                type: 'LineString',
+                coordinates: alt.coordinates,
+              },
+            })),
+          });
+        }
       }
 
       const obsSrc = map.getSource(
         'fb-obstacles',
       ) as maplibregl.GeoJSONSource | undefined;
       if (obsSrc) {
-        obsSrc.setData(
-          obstaclesToGeoJson([...CAVITE_OBSTACLES, ...blocks]) as unknown as GeoJSON.FeatureCollection,
-        );
+        const allObs = [...CAVITE_OBSTACLES, ...blocks];
+        const obsKey = allObs
+          .map((o) => `${o.id}:${o.lat.toFixed(5)}:${o.lng.toFixed(5)}`)
+          .join(';');
+        if (lastGeoJsonDataRef.current.obs !== obsKey) {
+          lastGeoJsonDataRef.current.obs = obsKey;
+          obsSrc.setData(
+            obstaclesToGeoJson(allObs) as unknown as GeoJSON.FeatureCollection,
+          );
+        }
       }
 
       const crumbsSrc = map.getSource(
         'fb-gps-crumbs',
       ) as maplibregl.GeoJSONSource | undefined;
       if (crumbsSrc) {
-        crumbsSrc.setData({
-          type: 'FeatureCollection',
-          features: crumbs.map(([lng, lat]) => ({
-            type: 'Feature',
-            properties: {},
-            geometry: { type: 'Point', coordinates: [lng, lat] },
-          })),
-        });
+        const crumbsKey = `${crumbs.length}:${crumbs[crumbs.length - 1]?.[0]?.toFixed(5) || 0}:${crumbs[crumbs.length - 1]?.[1]?.toFixed(5) || 0}`;
+        if (lastGeoJsonDataRef.current.crumbs !== crumbsKey) {
+          lastGeoJsonDataRef.current.crumbs = crumbsKey;
+          crumbsSrc.setData({
+            type: 'FeatureCollection',
+            features: crumbs.map(([lng, lat]) => ({
+              type: 'Feature',
+              properties: {},
+              geometry: { type: 'Point', coordinates: [lng, lat] },
+            })),
+          });
+        }
       }
 
       const diffSrc = map.getSource(
         'fb-diff-line',
       ) as maplibregl.GeoJSONSource | undefined;
       if (diffSrc) {
-        diffSrc.setData({
-          type: 'FeatureCollection',
-          features:
-            mode === 'supervisor-diff' && selectedDiscrepancy
-              ? [
-                  {
-                    type: 'Feature',
-                    properties: {},
-                    geometry: {
-                      type: 'LineString',
-                      coordinates: [
-                        [
-                          selectedDiscrepancy.recordedLng,
-                          selectedDiscrepancy.recordedLat,
+        const diffKey =
+          mode === 'supervisor-diff' && selectedDiscrepancy
+            ? `${selectedDiscrepancy.id}:${selectedDiscrepancy.recordedLat.toFixed(5)}:${selectedDiscrepancy.capturedLat.toFixed(5)}`
+            : 'none';
+        if (lastGeoJsonDataRef.current.diff !== diffKey) {
+          lastGeoJsonDataRef.current.diff = diffKey;
+          diffSrc.setData({
+            type: 'FeatureCollection',
+            features:
+              mode === 'supervisor-diff' && selectedDiscrepancy
+                ? [
+                    {
+                      type: 'Feature',
+                      properties: {},
+                      geometry: {
+                        type: 'LineString',
+                        coordinates: [
+                          [
+                            selectedDiscrepancy.recordedLng,
+                            selectedDiscrepancy.recordedLat,
+                          ],
+                          [
+                            selectedDiscrepancy.capturedLng,
+                            selectedDiscrepancy.capturedLat,
+                          ],
                         ],
-                        [
-                          selectedDiscrepancy.capturedLng,
-                          selectedDiscrepancy.capturedLat,
-                        ],
-                      ],
+                      },
                     },
-                  },
-                ]
-              : [],
-        });
+                  ]
+                : [],
+          });
+        }
       }
     },
     [mode, selectedDiscrepancy],
@@ -321,7 +359,7 @@ export function CaviteMapStage({
       center: initialCenter,
       zoom: mode === 'ops-fleet' ? 12.6 : 16.2,
       maxBounds: CAVITE_BOUNDS.maxBoundsLngLat,
-      pitch: 50,
+      pitch: mode === 'ops-fleet' ? 0 : 50,
       maxPitch: 56,
       bearing: 0,
       fadeDuration: 0,
@@ -371,6 +409,9 @@ export function CaviteMapStage({
             'source-layer': 'building',
             minzoom: 15.6,
             maxzoom: 19.5,
+            layout: {
+              visibility: mode === 'ops-fleet' ? 'none' : 'visible',
+            },
             paint: {
               'fill-extrusion-height': [
                 'max',
@@ -500,8 +541,19 @@ export function CaviteMapStage({
     });
 
     mapRef.current = map;
+    if (typeof window !== 'undefined') {
+      const w = window as unknown as { __caviteMaps?: maplibregl.Map[] };
+      w.__caviteMaps = w.__caviteMaps || [];
+      w.__caviteMaps.push(map);
+    }
 
     return () => {
+      if (typeof window !== 'undefined') {
+        const w = window as unknown as { __caviteMaps?: maplibregl.Map[] };
+        if (w.__caviteMaps) {
+          w.__caviteMaps = w.__caviteMaps.filter((m) => m !== map);
+        }
+      }
       stopDrivingLoop();
       navMarkerRef.current?.remove();
       navMarkerRef.current = null;
@@ -580,6 +632,9 @@ export function CaviteMapStage({
     ? `${resolvedEndpoints.origin.lat.toFixed(5)},${resolvedEndpoints.origin.lng.toFixed(5)}->${resolvedEndpoints.target.lat.toFixed(5)},${resolvedEndpoints.target.lng.toFixed(5)}|${vehicleProfile}|${offlineMode}|${userBlocks.map((b) => b.id).join(';')}`
     : 'none';
 
+  const resolvedEndpointsRef = useRef(resolvedEndpoints);
+  resolvedEndpointsRef.current = resolvedEndpoints;
+
   // Compute Cavite Street Route whenever endpoints, profile, offlineMode, or userBlocks change
   useEffect(() => {
     if (mode === 'supervisor-diff') {
@@ -616,7 +671,8 @@ export function CaviteMapStage({
       return;
     }
 
-    if (!resolvedEndpoints) {
+    const currentEndpoints = resolvedEndpointsRef.current;
+    if (!currentEndpoints) {
       setRouteResult(null);
       return;
     }
@@ -624,8 +680,8 @@ export function CaviteMapStage({
     let cancelled = false;
     (async () => {
       const route = await calculateStreetRoute(
-        resolvedEndpoints.origin,
-        resolvedEndpoints.target,
+        currentEndpoints.origin,
+        currentEndpoints.target,
         {
           profile: vehicleProfile,
           optimizationMode: 'fastest',
@@ -759,7 +815,6 @@ export function CaviteMapStage({
     mode,
     selectedDiscrepancy,
     endpointCoordKey,
-    resolvedEndpoints,
     vehicleProfile,
     offlineMode,
     userBlocks,
@@ -876,20 +931,24 @@ export function CaviteMapStage({
         existing.setLngLat([wo.targetLng, wo.targetLat]);
         const el = existing.getElement();
         el.style.backgroundColor = color;
-        el.style.transform = isSelected ? 'scale(1.18)' : 'scale(1)';
+        const innerSpan = el.firstElementChild as HTMLElement | null;
+        if (innerSpan) {
+          innerSpan.style.transform = isSelected ? 'scale(1.2)' : 'scale(1)';
+        }
       } else {
         const el = document.createElement('button');
         el.type = 'button';
         el.className = 'fb-sub-pin';
         el.setAttribute('aria-label', `Work order ${wo.ticketNumber}`);
         el.style.backgroundColor = color;
-        if (isSelected) {
-          el.style.transform = 'scale(1.18)';
-        }
         const woSpan = document.createElement('span');
         woSpan.style.color = '#fff';
         woSpan.style.fontSize = '10px';
         woSpan.style.fontWeight = '800';
+        woSpan.style.display = 'inline-block';
+        if (isSelected) {
+          woSpan.style.transform = 'scale(1.2)';
+        }
         woSpan.textContent =
           wo.workflowType === 'REPAIR'
             ? 'R'
@@ -1058,9 +1117,16 @@ export function CaviteMapStage({
       className={`relative w-full overflow-hidden rounded-xl border ${
         compactHeight ? 'h-[360px]' : 'h-[540px]'
       }`}
-      style={{ borderColor: 'var(--border-subtle)' }}
+      style={{
+        borderColor: 'var(--border-subtle)',
+        contain: 'layout paint',
+      }}
     >
-      <div ref={containerRef} className="h-full w-full" />
+      <div
+        ref={containerRef}
+        className="h-full w-full"
+        style={{ contain: 'strict' }}
+      />
 
       {/* Top-Left Tactical Turn-by-Turn / Mode HUD Banner */}
       <div

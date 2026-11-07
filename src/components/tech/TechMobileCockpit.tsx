@@ -95,11 +95,19 @@ export function TechMobileCockpit({
         'tech',
         '/api/bootstrap?surface=tech',
       );
-      setUser(data.user);
-      setWorkOrders(data.workOrders);
-      setNapBoxes(data.napBoxes);
+      setUser((prev) => (prev?.id === data.user.id && prev?.role === data.user.role ? prev : data.user));
+      setWorkOrders((prev) => {
+        const prevKey = prev.map((w) => `${w.id}:${w.status}:${w.opticalRxDbm}`).join(';');
+        const nextKey = data.workOrders.map((w) => `${w.id}:${w.status}:${w.opticalRxDbm}`).join(';');
+        return prevKey === nextKey ? prev : data.workOrders;
+      });
+      setNapBoxes((prev) => {
+        const prevKey = prev.map((n) => `${n.id}:${n.ports.map((p) => p.status).join(',')}`).join(';');
+        const nextKey = data.napBoxes.map((n) => `${n.id}:${n.ports.map((p) => p.status).join(',')}`).join(';');
+        return prevKey === nextKey ? prev : data.napBoxes;
+      });
       const ownTech = data.technicians[0] ?? null;
-      setTechProfile(ownTech);
+      setTechProfile((prev) => (prev?.userId === ownTech?.userId && prev?.gpsFreshness === ownTech?.gpsFreshness ? prev : ownTech));
       if (ownTech?.lastLat !== null && ownTech?.lastLng !== null && ownTech) {
         setTechPos((prev) =>
           prev ?? { lat: ownTech.lastLat!, lng: ownTech.lastLng! },
