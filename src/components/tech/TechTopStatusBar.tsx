@@ -134,12 +134,12 @@ export function TechTopStatusBar({
           {deadZone ? (
             <>
               <WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>DEAD-ZONE OFFLINE</span>
+              <span>Offline Mode</span>
             </>
           ) : (
             <>
               <Wifi className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>CELLULAR ONLINE</span>
+              <span>Online (Test Offline)</span>
             </>
           )}
         </button>

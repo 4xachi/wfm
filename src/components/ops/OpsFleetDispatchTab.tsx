@@ -137,11 +137,11 @@ export function OpsFleetDispatchTab({
             style={{ borderColor: 'var(--border-subtle)' }}
           >
             <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wider">
-                Field Fleet Telemetry Roster
+              <h2 className="text-sm font-semibold">
+                Field Technicians
               </h2>
               <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                Live telemetry &amp; last-known GPS coordinates
+                Live and last-reported GPS status
               </p>
             </div>
             <span
@@ -153,7 +153,7 @@ export function OpsFleetDispatchTab({
               }}
             >
               {technicians.filter((t) => t.gpsFreshness === 'LIVE').length}/
-              {technicians.length} LIVE
+              {technicians.length} Live
             </span>
           </div>
 

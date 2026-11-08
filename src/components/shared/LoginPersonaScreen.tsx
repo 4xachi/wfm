@@ -114,13 +114,13 @@ export function LoginPersonaScreen({
               <Radio className="h-5 w-5" aria-hidden="true" />
             </div>
             <div>
-              <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--accent-blaze)' }}>
-                FiberBlaze Cavite WFM
+              <div className="text-xs font-semibold" style={{ color: 'var(--accent-blaze)' }}>
+                FiberBlaze Cavite
               </div>
               <h1 className="text-lg font-semibold">
                 {surface === 'tech'
-                  ? 'Field Technician Mobile Sign-In'
-                  : 'Operations Command Center Sign-In'}
+                  ? 'Field Technician Sign-In'
+                  : 'Operations Console Sign-In'}
               </h1>
             </div>
           </div>
@@ -132,7 +132,7 @@ export function LoginPersonaScreen({
               color: 'var(--text-secondary)',
             }}
           >
-            HS256 JWT • {surface.toUpperCase()} SCOPE
+            Cavite Region
           </span>
         </div>
 
@@ -152,8 +152,8 @@ export function LoginPersonaScreen({
         )}
 
         <div className="mt-5">
-          <div className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: 'var(--text-muted)' }}>
-            1-Click Authenticated Rehearsal Personas
+          <div className="text-xs font-semibold mb-2.5" style={{ color: 'var(--text-muted)' }}>
+            Quick Sign-In Accounts
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {eligiblePersonas.map((p) => {

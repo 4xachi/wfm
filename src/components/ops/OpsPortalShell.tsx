@@ -254,24 +254,24 @@ export function OpsPortalShell({
   }> = [
     {
       id: 'fleet',
-      label: 'Fleet & Dispatch',
+      label: 'Dispatch & Map',
       icon: MapIcon,
       badge: kpis.unassignedCount + kpis.custIssueCount,
     },
     {
       id: 'intake',
-      label: 'Excel & Digital Intake',
+      label: 'Ticket Intake',
       icon: FileSpreadsheet,
     },
     {
       id: 'governance',
-      label: 'Supervisor Review & NetOps',
+      label: 'Supervisor Review',
       icon: ShieldAlert,
       badge: governanceBadgeCount,
     },
     {
       id: 'audit',
-      label: 'Audit & Integration Gate',
+      label: 'Audit & Outbox',
       icon: ShieldCheck,
       badge: bootstrap.outbox.length,
     },
@@ -323,14 +323,14 @@ export function OpsPortalShell({
                   }}
                 >
                   <Activity className="h-3 w-3" aria-hidden="true" />
-                  {sseLive ? 'SSE LIVE' : 'SYNCING'}
+                  {sseLive ? 'Live' : 'Syncing'}
                 </span>
               </div>
               <div
                 className="font-mono-tabular text-[11px]"
                 style={{ color: 'var(--text-muted)' }}
               >
-                {user.fullName} • {user.employeeCode} • {user.role}
+                {user.fullName} ({user.employeeCode}) — {user.role.replace('_', ' ')}
               </div>
             </div>
           </div>
@@ -350,7 +350,7 @@ export function OpsPortalShell({
                     color: 'var(--text-secondary)',
                   }}
                 >
-                  Gateway
+                  Home
                 </Link>
                 <Link
                   href="/tech"
@@ -362,7 +362,7 @@ export function OpsPortalShell({
                   }}
                 >
                   <Smartphone className="h-3.5 w-3.5" aria-hidden="true" />
-                  Field Mobile
+                  Field App
                 </Link>
                 <Link
                   href="/demo"
@@ -377,7 +377,7 @@ export function OpsPortalShell({
                     className="h-3.5 w-3.5"
                     aria-hidden="true"
                   />
-                  Split Rehearsal
+                  Dual View
                 </Link>
               </nav>
             )}
@@ -414,8 +414,8 @@ export function OpsPortalShell({
               }
               aria-label={
                 theme === 'noc-dark'
-                  ? 'Switch to Projector Daylight Mode'
-                  : 'Switch to Carbon Dark NOC Mode'
+                  ? 'Switch to Daylight Mode'
+                  : 'Switch to Dark Mode'
               }
               className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium min-h-9"
               style={{
@@ -427,12 +427,12 @@ export function OpsPortalShell({
               {theme === 'noc-dark' ? (
                 <>
                   <Sun className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Projector Light</span>
+                  <span>Light</span>
                 </>
               ) : (
                 <>
                   <Moon className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Carbon Dark</span>
+                  <span>Dark</span>
                 </>
               )}
             </button>
@@ -469,18 +469,16 @@ export function OpsPortalShell({
 
         {/* KPI Telemetry Strip */}
         <div
-          className="mt-2.5 pt-2.5 border-t grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 text-xs"
+          className="mt-2.5 pt-2.5 border-t grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {[
             { label: 'Total Tickets', val: kpis.totalOrders, color: 'var(--text-primary)' },
             { label: 'Unassigned', val: kpis.unassignedCount, color: 'var(--accent-blaze)' },
-            { label: 'Active Field', val: kpis.activeFieldCount, color: 'var(--status-info)' },
+            { label: 'In Progress', val: kpis.activeFieldCount, color: 'var(--status-info)' },
             { label: 'Completed', val: kpis.completedCount, color: 'var(--status-ok)' },
-            { label: 'Live GPS Techs', val: `${kpis.liveTechCount}/${bootstrap.technicians.length}`, color: 'var(--status-ok)' },
-            { label: 'FB-ISSUE Plant', val: kpis.fbIssueCount, color: 'var(--status-fault)' },
-            { label: 'CUST-ISSUE', val: kpis.custIssueCount, color: 'var(--status-warn)' },
-            { label: 'Gov Reviews', val: kpis.pendingReviewCount + kpis.pendingGpsDiffCount, color: 'var(--status-warn)' },
+            { label: 'Active Fleet', val: `${kpis.liveTechCount}/${bootstrap.technicians.length}`, color: 'var(--status-ok)' },
+            { label: 'Pending Review', val: kpis.fbIssueCount + kpis.pendingReviewCount + kpis.pendingGpsDiffCount, color: 'var(--status-warn)' },
           ].map((item) => (
             <div
               key={item.label}

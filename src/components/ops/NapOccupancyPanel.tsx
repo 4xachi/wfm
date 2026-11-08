@@ -53,14 +53,14 @@ export function NapOccupancyPanel({
             style={{ color: 'var(--status-info)' }}
             aria-hidden="true"
           />
-          <h2 className="text-xs font-semibold uppercase tracking-wider">
-            Cavite NAP Split-Box Port Inventory
+          <h2 className="text-sm font-semibold">
+            NAP Box Port Occupancy
           </h2>
           <span
             className="text-xs"
             style={{ color: 'var(--text-muted)' }}
           >
-            Select any distribution box to inspect physical 8/16 splitter ports
+            Click a box to view port assignments
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px]" style={{ color: 'var(--text-muted)' }}>

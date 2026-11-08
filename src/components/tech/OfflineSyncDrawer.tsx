@@ -165,12 +165,10 @@ export function OfflineSyncDrawer({
             )}
             <div>
               <h2 className="text-sm font-bold">
-                IndexedDB Dead-Zone Queue &amp; Idempotency Ledger
+                Offline Sync Queue
               </h2>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                Chronological FIFO replay with deterministic UUID{' '}
-                <span className="font-mono-tabular">idempotencyKey</span>{' '}
-                deduplication.
+                Field updates saved offline and synced in order when connectivity returns.
               </p>
             </div>
           </div>

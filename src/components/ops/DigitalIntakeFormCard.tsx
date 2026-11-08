@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import {
   FilePlus2,
-  MapPin,
   RefreshCw,
   Send,
 } from 'lucide-react';
@@ -182,23 +181,13 @@ export function DigitalIntakeFormCard({
           />
           <div>
             <h2 className="text-sm font-semibold">
-              Paperless Digital Subscriber Intake
+              New Dispatch Ticket
             </h2>
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Direct walk-in / online application into Cavite dispatch queue
+              Create a single walk-in or phone service request
             </p>
           </div>
         </div>
-        <span
-          className="font-mono-tabular rounded border px-2 py-0.5 text-[11px]"
-          style={{
-            backgroundColor: 'var(--bg-elevated)',
-            borderColor: 'var(--border-subtle)',
-            color: 'var(--status-info)',
-          }}
-        >
-          DIGITAL_INTAKE
-        </span>
       </div>
 
       {validationError && (
@@ -518,20 +507,10 @@ export function DigitalIntakeFormCard({
             {!canCommit
               ? `Requires Controller or Admin (${actorRole})`
               : submitting
-              ? 'Creating Paperless Ticket…'
-              : 'Create Paperless Dispatch Ticket'}
+              ? 'Creating Ticket…'
+              : 'Create Dispatch Ticket'}
           </span>
         </button>
-
-        <div
-          className="flex items-center gap-1.5 text-[11px]"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <span>
-            Enforces Cavite bounds check and formula sanitization prior to SQLite commit.
-          </span>
-        </div>
       </form>
     </section>
   );

@@ -4,13 +4,13 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
+  CheckCircle2,
   ExternalLink,
   PlayCircle,
   Radio,
   RotateCcw,
   ShieldAlert,
   Smartphone,
-  Sparkles,
 } from 'lucide-react';
 import { surfaceFetchJson } from '@/client/apiClient';
 import { setSimulatedDeadZone } from '@/client/offlineQueue';
@@ -46,7 +46,7 @@ export default function SplitScreenDemoPage() {
       setOpsRevision((r) => r + 1);
       setTechRevision((r) => r + 1);
       setStatusNote(
-        `Synchronized dual sessions active: Left (${opsEmail}) + Right (${techEmail}).`,
+        `Connected both panes: ${opsEmail} (NOC) and ${techEmail} (Field).`,
       );
     } catch (err) {
       setStatusNote(
@@ -70,7 +70,7 @@ export default function SplitScreenDemoPage() {
       });
       setOpsRevision((r) => r + 1);
       setStatusNote(
-        'Left NOC pane switched to Engr. Clarisse Mendoza (SUPERVISOR) for NetOps & >30m GPS Diff governance.',
+        'Switched NOC pane to Engr. Clarisse Mendoza (Supervisor).',
       );
     } catch (err) {
       setStatusNote(
@@ -116,10 +116,10 @@ export default function SplitScreenDemoPage() {
       setOpsRevision((r) => r + 1);
       setTechRevision((r) => r + 1);
       setStatusNote(
-        'Cavite baseline database, NAP port locks, GPS discrepancies, and audit chain reset to pristine rehearsal state.',
+        'Cavite work orders, NAP ports, and field telemetry restored to baseline.',
       );
     } catch (err) {
-      setStatusNote(err instanceof Error ? err.message : 'Demo reset failed.');
+      setStatusNote(err instanceof Error ? err.message : 'Reset failed.');
     } finally {
       setBusyAction(null);
     }
@@ -134,7 +134,7 @@ export default function SplitScreenDemoPage() {
         color: 'var(--text-primary)',
       }}
     >
-      {/* Top Executive Presenter Control Bar */}
+      {/* Top Bar */}
       <header
         className="border-b px-4 py-2.5 shrink-0"
         style={{
@@ -154,7 +154,7 @@ export default function SplitScreenDemoPage() {
               }}
             >
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Launchpad</span>
+              <span>Home</span>
             </Link>
             <div className="flex items-center gap-2">
               <span
@@ -168,13 +168,13 @@ export default function SplitScreenDemoPage() {
               </span>
               <div>
                 <div className="text-sm font-bold tracking-tight">
-                  Unified Cavite Operations &amp; Field Cockpit
+                  Combined NOC &amp; Field View
                 </div>
                 <div
-                  className="font-mono-tabular text-[11px]"
+                  className="text-[11px]"
                   style={{ color: 'var(--text-muted)' }}
                 >
-                  Cavite Operations Center &amp; Field Cockpit • Live Telemetry Stream
+                  Cavite Operations Console &amp; Field Technician Handset
                 </div>
               </div>
             </div>
@@ -194,8 +194,8 @@ export default function SplitScreenDemoPage() {
               <PlayCircle className="h-4 w-4" aria-hidden="true" />
               <span>
                 {busyAction === 'signin'
-                  ? 'Connecting…'
-                  : 'Quick Connect Panes'}
+                  ? 'Signing In…'
+                  : 'Sign In Both Panes'}
               </span>
             </button>
 
@@ -227,7 +227,7 @@ export default function SplitScreenDemoPage() {
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               <span>
-                {busyAction === 'reset' ? 'Resetting…' : 'Reset Cavite Baseline'}
+                {busyAction === 'reset' ? 'Resetting…' : 'Reset Baseline'}
               </span>
             </button>
 
@@ -271,7 +271,7 @@ export default function SplitScreenDemoPage() {
               color: 'var(--text-primary)',
             }}
           >
-            <Sparkles
+            <CheckCircle2
               className="h-3.5 w-3.5 shrink-0"
               style={{ color: 'var(--status-ok)' }}
               aria-hidden="true"
@@ -286,7 +286,7 @@ export default function SplitScreenDemoPage() {
         {/* Left Pane: Operations Management NOC Portal */}
         <section
           aria-label="Operations NOC Surface"
-          className="lg:col-span-7 xl:col-span-8 rounded-2xl border overflow-hidden flex flex-col lg:h-[calc(100vh-148px)]"
+          className="lg:col-span-7 xl:col-span-8 rounded-2xl border overflow-hidden flex flex-col lg:h-[calc(100vh-84px)]"
           style={{
             backgroundColor: 'var(--bg-surface)',
             borderColor: 'var(--border-subtle)',
@@ -303,7 +303,7 @@ export default function SplitScreenDemoPage() {
         {/* Right Pane: Field Technician Mobile Device Viewport */}
         <section
           aria-label="Field Technician Mobile Surface"
-          className="lg:col-span-5 xl:col-span-4 rounded-2xl border overflow-hidden flex flex-col lg:h-[calc(100vh-148px)]"
+          className="lg:col-span-5 xl:col-span-4 rounded-2xl border overflow-hidden flex flex-col lg:h-[calc(100vh-84px)]"
           style={{
             backgroundColor: '#090d12',
             borderColor: 'var(--border-strong)',
@@ -322,7 +322,7 @@ export default function SplitScreenDemoPage() {
                 className="h-3.5 w-3.5 text-orange-400"
                 aria-hidden="true"
               />
-              Field Handset Viewport (PWA + IndexedDB Queue)
+              Field Technician Handset
             </span>
             <span className="font-mono-tabular text-[10px] text-slate-400">
               Cavite Field Unit

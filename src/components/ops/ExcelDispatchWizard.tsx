@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Download,
   FileSpreadsheet,
-  Sparkles,
   Upload,
 } from 'lucide-react';
 import { surfaceFetchJson } from '@/client/apiClient';
@@ -227,10 +226,10 @@ export function ExcelDispatchWizard({
             />
             <div>
               <h2 className="text-sm font-semibold">
-                5-Step Excel-to-Paperless Dispatch Wizard
+                Batch Ticket Import
               </h2>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                XXE/Zip-bomb hardened .xlsx/.csv parser with Cavite geofence validation
+                Upload daily dispatch sheets (.xlsx or .csv) to create field tickets
               </p>
             </div>
           </div>
@@ -298,13 +297,13 @@ export function ExcelDispatchWizard({
               />
               <div>
                 <div className="text-sm font-semibold">
-                  Upload Daily Cavite Dispatch Workbook (.xlsx or .csv)
+                  Upload Daily Cavite Dispatch Sheet (.xlsx or .csv)
                 </div>
                 <p
                   className="text-xs mt-1"
                   style={{ color: 'var(--text-muted)' }}
                 >
-                  Max 5 MB • Formula injection sanitized • Out-of-province coordinates quarantined
+                  Supports .xlsx and .csv files up to 5 MB with automatic Cavite coordinate validation
                 </p>
               </div>
               <div>
@@ -342,7 +341,7 @@ export function ExcelDispatchWizard({
                 }}
               >
                 <Download className="h-4 w-4" aria-hidden="true" />
-                <span>Download Realistic Cavite Sample .xlsx</span>
+                <span>Download Sample .xlsx</span>
               </button>
 
               <button
@@ -356,8 +355,8 @@ export function ExcelDispatchWizard({
                   color: 'var(--status-info)',
                 }}
               >
-                <Sparkles className="h-4 w-4" aria-hidden="true" />
-                <span>Load Cavite Sample Directly into Wizard</span>
+                <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
+                <span>Load Sample Batch</span>
               </button>
             </div>
           </div>

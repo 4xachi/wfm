@@ -10,7 +10,6 @@ import {
   MapPin,
   Navigation,
   Phone,
-  Sparkles,
   Truck,
   UserCheck,
 } from 'lucide-react';
@@ -405,15 +404,15 @@ export function WorkOrderInspectorCard({
         }}
       >
         <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider">
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
             <Navigation
               className="h-3.5 w-3.5"
               style={{ color: 'var(--accent-blaze)' }}
               aria-hidden="true"
             />
             {workOrder.status === 'CUST_ISSUE'
-              ? 'Reschedule & Street-ETA Dispatch'
-              : 'Cavite Street-ETA Suggestions'}
+              ? 'Reschedule & Technician ETA'
+              : 'Recommended Technicians by ETA'}
           </span>
           <span
             className="font-mono-tabular text-[11px]"
@@ -434,7 +433,7 @@ export function WorkOrderInspectorCard({
             >
               {workOrder.status === 'CUST_ISSUE'
                 ? 'Confirmed Reschedule Window / Dispatch Notes'
-                : 'Controller Dispatch Instructions (Optional)'}
+                : 'Dispatch Instructions (Optional)'}
             </label>
             <input
               id="ops-assign-notes"
@@ -472,11 +471,11 @@ export function WorkOrderInspectorCard({
               color: 'var(--accent-blaze-ink)',
             }}
           >
-            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+            <UserCheck className="h-3.5 w-3.5" aria-hidden="true" />
             <span>
               {workOrder.status === 'CUST_ISSUE'
-                ? `Reschedule & Assign Suggested Tech (${topSuggestion.fullName} • ${formatEtaSeconds(topSuggestion.streetEtaSeconds)})`
-                : `Assign Suggested Tech (${topSuggestion.fullName} • ${formatEtaSeconds(topSuggestion.streetEtaSeconds)})`}
+                ? `Reschedule & Assign (${topSuggestion.fullName}, ${formatEtaSeconds(topSuggestion.streetEtaSeconds)})`
+                : `Assign Closest Technician (${topSuggestion.fullName}, ${formatEtaSeconds(topSuggestion.streetEtaSeconds)})`}
             </span>
           </button>
         )}

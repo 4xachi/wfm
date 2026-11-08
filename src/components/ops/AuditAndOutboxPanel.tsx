@@ -241,8 +241,8 @@ export function AuditAndOutboxPanel({
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-bold">
                 {auditIntegrity.valid
-                  ? 'SHA-256 Tamper-Evident Hash Chain: INTACT'
-                  : `SHA-256 Hash Chain Broken at Seq #${auditIntegrity.brokenAtSeq}`}
+                  ? 'Audit Log Integrity: Verified'
+                  : `Hash Chain Alert at Entry #${auditIntegrity.brokenAtSeq}`}
               </h2>
               <span
                 className="font-mono-tabular rounded border px-2 py-0.5 text-[11px] font-semibold"
@@ -252,11 +252,11 @@ export function AuditAndOutboxPanel({
                   color: 'var(--text-primary)',
                 }}
               >
-                {auditIntegrity.checkedCount} VERIFIED LINKS
+                {auditIntegrity.checkedCount} Entries Verified
               </span>
             </div>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-              Canonical digest over prevHash | actorId | actorRole | action | entity | detailJson | createdAt
+              Cryptographic SHA-256 hash chain verified across all recorded operations
             </p>
           </div>
         </div>
@@ -273,7 +273,7 @@ export function AuditAndOutboxPanel({
             }}
           >
             <Download className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Export Sanitized KPI & Audit CSV</span>
+            <span>Export KPI &amp; Audit CSV</span>
           </button>
 
           {isAdmin && (
@@ -290,15 +290,15 @@ export function AuditAndOutboxPanel({
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               <span>
                 {resetting
-                  ? 'Resetting Baseline…'
-                  : '1-Click Reset Cavite Demo Data'}
+                  ? 'Resetting…'
+                  : 'Reset Baseline Data'}
               </span>
             </button>
           )}
         </div>
       </section>
 
-      {/* Gated Integration Outbox (GATED_DRY_RUN) */}
+      {/* External System Sync Outbox */}
       <section
         aria-label="Gated Integration Outbox"
         className="rounded-xl border p-4 space-y-3"
@@ -319,10 +319,10 @@ export function AuditAndOutboxPanel({
             />
             <div>
               <h2 className="text-sm font-semibold">
-                Gated External Integration Outbox (Zero Live Writes)
+                External System Sync Outbox
               </h2>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                All OLT provisioning, CRM billing, and inventory handovers stay quarantined in GATED_DRY_RUN
+                Queued updates for OLT provisioning and CRM billing
               </p>
             </div>
           </div>
