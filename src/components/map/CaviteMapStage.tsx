@@ -1259,7 +1259,7 @@ export function CaviteMapStage({
               ETA {formatDuration(hud.etaSec)} •{' '}
               {formatMeters(routeResult.distanceMeters)}
               {mode === 'tech-navigation'
-                ? ` • ${hud.speedKmh} km/h • HMM ${hud.confidence}%`
+                ? ` • ${hud.speedKmh} km/h`
                 : ''}
             </span>
           )}

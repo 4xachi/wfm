@@ -141,7 +141,7 @@ export function OpsFleetDispatchTab({
                 Field Fleet Telemetry Roster
               </h2>
               <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                Strict GPS honesty: never fabricates live fixes
+                Live telemetry &amp; last-known GPS coordinates
               </p>
             </div>
             <span

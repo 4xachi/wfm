@@ -8,7 +8,6 @@ import {
   Navigation,
   FileSpreadsheet,
   WifiOff,
-  CheckCircle2,
   ArrowUpRight,
   GitBranch,
   Lock,
@@ -184,7 +183,7 @@ export default function ExecutiveLaunchpadPage() {
               Select Operating Surface
             </h1>
             <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Scoped JWT cookies keep Operations and Field Technician sessions isolated
+              Integrated Operations Center &amp; Field Unit PWA
             </span>
           </div>
 
@@ -359,7 +358,7 @@ export default function ExecutiveLaunchpadPage() {
           }}
         >
           <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-            FiberBlaze November 2026 Blueprint — Implemented Operational Safeguards
+            Enterprise Operational Safeguards &amp; Reliability Controls
           </h2>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
             {[
@@ -412,13 +411,6 @@ export default function ExecutiveLaunchpadPage() {
                   >
                     {item.detail}
                   </p>
-                  <div
-                    className="mt-2.5 inline-flex items-center gap-1 font-mono-tabular text-[11px]"
-                    style={{ color: 'var(--status-ok)' }}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>TDD VERIFIED</span>
-                  </div>
                 </div>
               );
             })}

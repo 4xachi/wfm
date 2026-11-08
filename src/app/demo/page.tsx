@@ -4,9 +4,6 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
-  BookOpen,
-  ChevronDown,
-  ChevronUp,
   ExternalLink,
   PlayCircle,
   Radio,
@@ -22,39 +19,11 @@ import { TechMobileCockpit } from '@/components/tech/TechMobileCockpit';
 
 const DEMO_PW = 'FiberBlaze2026!';
 
-const PITCH_ACTS = [
-  {
-    step: 'ACT 01',
-    title: 'Excel Batch Intake & Street-ETA Dispatch',
-    detail:
-      'Left Pane -> "Excel & Digital Intake" -> Load Sample Cavite .xlsx -> inspect out-of-bounds rejection -> Commit Batch -> assign top Street-ETA technician -> watch Right Pane update live over SSE.',
-  },
-  {
-    step: 'ACT 02',
-    title: '3D Cavite Gimbal Drive & Road-Block Detour',
-    detail:
-      'Right Pane -> "3D Nav" -> tap "3D Drive" (5x) along extruded Cavite 3D buildings -> tap "Block road" on the highway ahead -> watch live street detour + NOC fleet puck sync.',
-  },
-  {
-    step: 'ACT 03',
-    title: 'Dead-Zone Offline FTTH Proof & UUID Replay',
-    detail:
-      'Right Pane -> toggle "Dead-Zone" -> "Execute" -> allocate FREE NAP port, set -19.2 dBm, capture watermarked camera proof + signature -> queue in IndexedDB -> Flush & test UUID replay.',
-  },
-  {
-    step: 'ACT 04',
-    title: 'Transfer Port-Lock, 3D GPS Diff & Gated Outbox',
-    detail:
-      'Click "Switch Left -> Supervisor" -> "Supervisor Review & NetOps" -> resolve FB-ISSUE fiber fault, inspect 65.5m 3D GPS Discrepancy, and verify SHA-256 Audit + GATED_DRY_RUN Outbox.',
-  },
-] as const;
-
 export default function SplitScreenDemoPage() {
   const [opsRevision, setOpsRevision] = useState(1);
   const [techRevision, setTechRevision] = useState(1);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [statusNote, setStatusNote] = useState<string | null>(null);
-  const [showScript, setShowScript] = useState(true);
 
   async function autoSignInBothPanes(
     opsEmail = 'controller@fiberblaze.ph',
@@ -199,14 +168,13 @@ export default function SplitScreenDemoPage() {
               </span>
               <div>
                 <div className="text-sm font-bold tracking-tight">
-                  Executive Split-Screen Theater
+                  Unified Cavite Operations &amp; Field Cockpit
                 </div>
                 <div
                   className="font-mono-tabular text-[11px]"
                   style={{ color: 'var(--text-muted)' }}
                 >
-                  Isolated Scoped Cookies (fb_ops_session + fb_tech_session) •
-                  Live REST + SSE Loop
+                  Cavite Operations Center &amp; Field Cockpit • Live Telemetry Stream
                 </div>
               </div>
             </div>
@@ -226,8 +194,8 @@ export default function SplitScreenDemoPage() {
               <PlayCircle className="h-4 w-4" aria-hidden="true" />
               <span>
                 {busyAction === 'signin'
-                  ? 'Signing In…'
-                  : '1-Click Sign In Both Panes'}
+                  ? 'Connecting…'
+                  : 'Quick Connect Panes'}
               </span>
             </button>
 
@@ -243,7 +211,7 @@ export default function SplitScreenDemoPage() {
               }}
             >
               <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Switch Left -&gt; Supervisor</span>
+              <span>Switch to Supervisor</span>
             </button>
 
             <button
@@ -259,27 +227,8 @@ export default function SplitScreenDemoPage() {
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               <span>
-                {busyAction === 'reset' ? 'Resetting…' : 'Reset Rehearsal DB'}
+                {busyAction === 'reset' ? 'Resetting…' : 'Reset Cavite Baseline'}
               </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowScript((v) => !v)}
-              className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium min-h-9"
-              style={{
-                backgroundColor: 'var(--bg-surface)',
-                borderColor: 'var(--border-subtle)',
-                color: 'var(--text-secondary)',
-              }}
-            >
-              <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Pitch Guide</span>
-              {showScript ? (
-                <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
-              ) : (
-                <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-              )}
             </button>
 
             <Link
@@ -328,40 +277,6 @@ export default function SplitScreenDemoPage() {
               aria-hidden="true"
             />
             <span>{statusNote}</span>
-          </div>
-        )}
-
-        {showScript && (
-          <div className="mx-auto max-w-[1920px] mt-2.5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
-            {PITCH_ACTS.map((act) => (
-              <div
-                key={act.step}
-                className="rounded-lg border px-3 py-2 text-xs"
-                style={{
-                  backgroundColor: 'var(--bg-surface)',
-                  borderColor: 'var(--border-subtle)',
-                }}
-              >
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span
-                    className="font-mono-tabular rounded px-1.5 py-0.5 text-[10px] font-bold"
-                    style={{
-                      backgroundColor: 'var(--accent-blaze-soft)',
-                      color: 'var(--accent-blaze)',
-                    }}
-                  >
-                    {act.step}
-                  </span>
-                  <span className="font-semibold truncate">{act.title}</span>
-                </div>
-                <p
-                  className="text-[11px] leading-relaxed"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  {act.detail}
-                </p>
-              </div>
-            ))}
           </div>
         )}
       </header>
