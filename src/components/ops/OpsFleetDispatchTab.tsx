@@ -8,6 +8,9 @@ import {
   Truck,
   WifiOff,
   Clock,
+  Eye,
+  Layers,
+  Navigation,
 } from 'lucide-react';
 import { CaviteMapStage } from '@/components/map/CaviteMapStage';
 import type {
@@ -76,6 +79,8 @@ export function OpsFleetDispatchTab({
   const [priorityFilter, setPriorityFilter] = useState<
     WorkOrderPriority | 'ALL'
   >('ALL');
+  const [focusMode, setFocusMode] = useState(true);
+  const [focusedTechId, setFocusedTechId] = useState<string | null>(null);
 
   const filteredOrders = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -102,6 +107,69 @@ export function OpsFleetDispatchTab({
     filteredOrders[0] ??
     null;
 
+  const activeTrackedTechId = useMemo(() => {
+    if (focusedTechId) return focusedTechId;
+    if (selectedWorkOrder?.assignedTechId) {
+      return selectedWorkOrder.assignedTechId;
+    }
+    const liveTechs = technicians.filter(
+      (t) =>
+        t.gpsFreshness === 'LIVE' &&
+        t.lastLat !== null &&
+        t.lastLng !== null,
+    );
+    const candidatePool =
+      liveTechs.length > 0
+        ? liveTechs
+        : technicians.filter(
+            (t) =>
+              t.gpsFreshness !== 'OFFLINE' &&
+              t.lastLat !== null &&
+              t.lastLng !== null,
+          );
+    if (candidatePool.length > 0 && selectedWorkOrder) {
+      return (
+        [...candidatePool].sort((a, b) => {
+          const dA = Math.hypot(
+            (a.lastLat ?? 0) - selectedWorkOrder.targetLat,
+            (a.lastLng ?? 0) - selectedWorkOrder.targetLng,
+          );
+          const dB = Math.hypot(
+            (b.lastLat ?? 0) - selectedWorkOrder.targetLat,
+            (b.lastLng ?? 0) - selectedWorkOrder.targetLng,
+          );
+          return dA - dB;
+        })[0]?.userId ?? null
+      );
+    }
+    return candidatePool[0]?.userId ?? null;
+  }, [focusedTechId, selectedWorkOrder, technicians]);
+
+  function handleSelectWorkOrder(woId: string) {
+    setFocusedTechId(null);
+    onSelectWorkOrderId(woId);
+  }
+
+  function handleSelectTechnician(techUserId: string | null) {
+    if (!techUserId) {
+      setFocusedTechId(null);
+      return;
+    }
+    setFocusMode(true);
+    setFocusedTechId(techUserId);
+    const techActiveWo =
+      workOrders.find(
+        (w) => w.assignedTechId === techUserId && w.status === 'WORKING',
+      ) ??
+      workOrders.find(
+        (w) => w.assignedTechId === techUserId && w.status === 'ASSIGNED',
+      ) ??
+      workOrders.find((w) => w.assignedTechId === techUserId);
+    if (techActiveWo) {
+      onSelectWorkOrderId(techActiveWo.id);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Top Row: 3D Cavite Map Stage + Strict GPS Honesty Technician Roster */}
@@ -115,9 +183,13 @@ export function OpsFleetDispatchTab({
             mode="ops-fleet"
             workOrders={filteredOrders}
             selectedWorkOrder={selectedWorkOrder}
-            onSelectWorkOrder={onSelectWorkOrderId}
+            onSelectWorkOrder={handleSelectWorkOrder}
             napBoxes={napBoxes}
             technicians={technicians}
+            focusedTechId={focusedTechId}
+            onSelectTech={handleSelectTechnician}
+            focusMode={focusMode}
+            onToggleFocusMode={setFocusMode}
             compactHeight={embeddedInSplitScreen}
           />
         </div>
@@ -133,28 +205,57 @@ export function OpsFleetDispatchTab({
           }}
         >
           <div
-            className="flex items-center justify-between gap-2 border-b pb-2.5 mb-2.5"
+            className="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5 mb-2.5"
             style={{ borderColor: 'var(--border-subtle)' }}
           >
             <div>
-              <h2 className="text-sm font-semibold">
-                Field Technicians
-              </h2>
+              <h2 className="text-sm font-semibold">Field Technicians</h2>
               <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                Live and last-reported GPS status
+                Click a technician to focus their live route on the map
               </p>
             </div>
-            <span
-              className="font-mono-tabular rounded border px-2 py-0.5 text-xs font-semibold"
-              style={{
-                backgroundColor: 'var(--status-ok-soft)',
-                borderColor: 'var(--status-ok)',
-                color: 'var(--status-ok)',
-              }}
-            >
-              {technicians.filter((t) => t.gpsFreshness === 'LIVE').length}/
-              {technicians.length} Live
-            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setFocusMode((prev) => !prev)}
+                className="inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-semibold transition-colors"
+                style={{
+                  backgroundColor: focusMode
+                    ? 'var(--accent-blaze)'
+                    : 'var(--bg-elevated)',
+                  borderColor: focusMode
+                    ? 'var(--accent-blaze)'
+                    : 'var(--border-subtle)',
+                  color: focusMode
+                    ? 'var(--accent-blaze-ink)'
+                    : 'var(--text-secondary)',
+                }}
+                title="Toggle between focused single-order routing and full Cavite fleet view"
+              >
+                {focusMode ? (
+                  <>
+                    <Eye className="h-3 w-3" aria-hidden="true" />
+                    Focus Mode
+                  </>
+                ) : (
+                  <>
+                    <Layers className="h-3 w-3" aria-hidden="true" />
+                    All Fleet
+                  </>
+                )}
+              </button>
+              <span
+                className="font-mono-tabular rounded border px-2 py-0.5 text-xs font-semibold"
+                style={{
+                  backgroundColor: 'var(--status-ok-soft)',
+                  borderColor: 'var(--status-ok)',
+                  color: 'var(--status-ok)',
+                }}
+              >
+                {technicians.filter((t) => t.gpsFreshness === 'LIVE').length}/
+                {technicians.length} Live
+              </span>
+            </div>
           </div>
 
           <div className="space-y-2 overflow-y-auto max-h-[450px]">
@@ -167,27 +268,66 @@ export function OpsFleetDispatchTab({
                 tech.gpsFreshness === 'LIVE'
                   ? Radio
                   : tech.gpsFreshness === 'STALE'
-                  ? Clock
-                  : WifiOff;
+                    ? Clock
+                    : WifiOff;
+              const isTracked =
+                focusMode && activeTrackedTechId === tech.userId;
+              const techTargetWo =
+                workOrders.find(
+                  (w) =>
+                    w.assignedTechId === tech.userId && w.status === 'WORKING',
+                ) ??
+                workOrders.find(
+                  (w) =>
+                    w.assignedTechId === tech.userId && w.status === 'ASSIGNED',
+                ) ??
+                (isTracked ? selectedWorkOrder : null);
 
               return (
                 <div
                   key={tech.userId}
-                  className="rounded-lg border p-2.5 text-xs"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleSelectTechnician(tech.userId)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSelectTechnician(tech.userId);
+                    }
+                  }}
+                  className="rounded-lg border p-2.5 text-xs cursor-pointer transition-colors"
                   style={{
-                    backgroundColor: 'var(--bg-elevated)',
-                    borderColor: 'var(--border-subtle)',
+                    backgroundColor: isTracked
+                      ? 'var(--accent-blaze-soft)'
+                      : 'var(--bg-elevated)',
+                    borderColor: isTracked
+                      ? 'var(--accent-blaze)'
+                      : 'var(--border-subtle)',
                   }}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="font-semibold">{tech.fullName}</span>
+                    <div className="min-w-0 flex items-center gap-1.5">
+                      <span className="font-semibold truncate">
+                        {tech.fullName}
+                      </span>
                       <span
-                        className="font-mono-tabular ml-1.5 text-[11px]"
+                        className="font-mono-tabular text-[11px] shrink-0"
                         style={{ color: 'var(--text-muted)' }}
                       >
                         {tech.employeeCode}
                       </span>
+                      {isTracked && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold shrink-0"
+                          style={{
+                            backgroundColor: 'var(--accent-blaze)',
+                            color: 'var(--accent-blaze-ink)',
+                          }}
+                        >
+                          <Navigation className="h-2.5 w-2.5" aria-hidden="true" />
+                          Focused
+                        </span>
+                      )}
                     </div>
                     <span
                       className="font-mono-tabular inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold shrink-0"
@@ -218,6 +358,31 @@ export function OpsFleetDispatchTab({
                     </span>
                   </div>
 
+                  {techTargetWo && (
+                    <div
+                      className="mt-1.5 rounded border px-2 py-1 text-[11px] flex items-center justify-between gap-2"
+                      style={{
+                        backgroundColor: 'var(--bg-surface)',
+                        borderColor: 'var(--border-subtle)',
+                      }}
+                    >
+                      <span className="truncate">
+                        Dest:{' '}
+                        <strong className="font-mono-tabular">
+                          {techTargetWo.ticketNumber}
+                        </strong>{' '}
+                        • {techTargetWo.targetBarangay},{' '}
+                        {techTargetWo.targetMunicipality}
+                      </span>
+                      <span
+                        className="font-mono-tabular shrink-0 text-[10px] font-semibold"
+                        style={{ color: 'var(--accent-blaze)' }}
+                      >
+                        {techTargetWo.status}
+                      </span>
+                    </div>
+                  )}
+
                   <div
                     className="mt-1 font-mono-tabular text-[11px] flex items-center justify-between gap-2"
                     style={{ color: 'var(--text-muted)' }}
@@ -227,8 +392,8 @@ export function OpsFleetDispatchTab({
                       {tech.gpsFreshness === 'OFFLINE'
                         ? 'Session Logged Out'
                         : tech.lastSpeedKmh !== null
-                        ? `${tech.lastSpeedKmh} km/h`
-                        : '0 km/h'}
+                          ? `${tech.lastSpeedKmh} km/h`
+                          : '0 km/h'}
                     </span>
                   </div>
                 </div>
@@ -416,11 +581,11 @@ export function OpsFleetDispatchTab({
                         key={wo.id}
                         role="button"
                         tabIndex={0}
-                        onClick={() => onSelectWorkOrderId(wo.id)}
+                        onClick={() => handleSelectWorkOrder(wo.id)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
-                            onSelectWorkOrderId(wo.id);
+                            handleSelectWorkOrder(wo.id);
                           }
                         }}
                         className="border-b transition-colors h-10"

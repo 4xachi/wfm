@@ -128,6 +128,7 @@ button:disabled {
 }
 
 .fb-sub-pin {
+  position: relative;
   width: 32px;
   height: 32px;
   border-radius: 9999px;
@@ -136,6 +137,24 @@ button:disabled {
   justify-content: center;
   border: 2.5px solid #ffffff;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+
+.fb-marker-badge {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(11, 15, 20, 0.94);
+  color: #f8fafc;
+  border: 1px solid rgba(249, 115, 22, 0.65);
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
 }
 
 .maplibregl-ctrl-attrib {

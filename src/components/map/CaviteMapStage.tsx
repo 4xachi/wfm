@@ -14,6 +14,8 @@ import {
   CornerUpLeft,
   ArrowUp,
   MapPin,
+  Eye,
+  Layers,
 } from 'lucide-react';
 import {
   CAVITE_BOUNDS,
@@ -66,6 +68,29 @@ function buildTechPuckSvg(
   `;
 }
 
+function syncMarkerBadge(
+  el: HTMLElement,
+  badgeText: string | null,
+  accentColor?: string,
+) {
+  let badge = el.querySelector('.fb-marker-badge') as HTMLElement | null;
+  if (!badgeText) {
+    if (badge) badge.remove();
+    return;
+  }
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.className = 'fb-marker-badge';
+    el.appendChild(badge);
+  }
+  if (badge.textContent !== badgeText) {
+    badge.textContent = badgeText;
+  }
+  if (accentColor) {
+    badge.style.borderColor = accentColor;
+  }
+}
+
 export function CaviteMapStage({
   mode,
   workOrders = [],
@@ -73,6 +98,10 @@ export function CaviteMapStage({
   onSelectWorkOrder,
   napBoxes = [],
   technicians = [],
+  focusedTechId = null,
+  onSelectTech,
+  focusMode,
+  onToggleFocusMode,
   selectedDiscrepancy = null,
   activeTechPosition = null,
   vehicleProfile = 'l300_van',
@@ -99,6 +128,7 @@ export function CaviteMapStage({
   const lastCrumbUpdateRef = useRef<number>(0);
   const initialPitchAppliedRef = useRef(false);
   const breadcrumbsRef = useRef<Array<[number, number]>>([]);
+  const lastFocusedSelectionKeyRef = useRef<string>('');
   const lastGeoJsonDataRef = useRef<{
     primary?: string;
     alt?: string;
@@ -109,6 +139,8 @@ export function CaviteMapStage({
 
   const [camera3D, setCamera3D] = useState(mode !== 'ops-fleet');
   const [buildings3D, setBuildings3D] = useState(mode !== 'ops-fleet');
+  const [internalFocusMode, setInternalFocusMode] = useState(true);
+  const [followTech, setFollowTech] = useState(false);
   const [clickAction, setClickAction] = useState<'origin' | 'pin' | 'block'>(
     mode === 'tech-navigation' ? 'block' : 'pin',
   );
@@ -122,6 +154,17 @@ export function CaviteMapStage({
   const [isDriving, setIsDriving] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] =
     useState<PlaybackSpeedMultiplier>(2);
+
+  const effectiveFocusMode =
+    mode === 'ops-fleet' ? (focusMode ?? internalFocusMode) : false;
+
+  const handleToggleFocusMode = useCallback(
+    (next: boolean) => {
+      setInternalFocusMode(next);
+      onToggleFocusMode?.(next);
+    },
+    [onToggleFocusMode],
+  );
 
   const camera3DRef = useRef(camera3D);
   camera3DRef.current = camera3D;
@@ -149,6 +192,70 @@ export function CaviteMapStage({
     setIsDriving(false);
   }, []);
 
+  const activeWo = selectedWorkOrder ?? workOrders[0] ?? null;
+
+  // Determine the focused technician for ops-fleet mode
+  const focusedTech = useMemo(() => {
+    if (mode !== 'ops-fleet') return null;
+
+    if (focusedTechId) {
+      const explicit = technicians.find(
+        (t) =>
+          t.userId === focusedTechId &&
+          t.lastLat !== null &&
+          t.lastLng !== null,
+      );
+      if (explicit) return explicit;
+    }
+
+    if (activeWo?.assignedTechId) {
+      const assigned = technicians.find(
+        (t) =>
+          t.userId === activeWo.assignedTechId &&
+          t.lastLat !== null &&
+          t.lastLng !== null,
+      );
+      if (assigned) return assigned;
+    }
+
+    const liveTechs = technicians.filter(
+      (t) =>
+        t.gpsFreshness === 'LIVE' &&
+        t.lastLat !== null &&
+        t.lastLng !== null,
+    );
+    const candidatePool =
+      liveTechs.length > 0
+        ? liveTechs
+        : technicians.filter(
+            (t) =>
+              t.gpsFreshness !== 'OFFLINE' &&
+              t.lastLat !== null &&
+              t.lastLng !== null,
+          );
+    if (candidatePool.length > 0 && activeWo) {
+      return (
+        [...candidatePool].sort((a, b) => {
+          const dA = Math.hypot(
+            (a.lastLat ?? 0) - activeWo.targetLat,
+            (a.lastLng ?? 0) - activeWo.targetLng,
+          );
+          const dB = Math.hypot(
+            (b.lastLat ?? 0) - activeWo.targetLat,
+            (b.lastLng ?? 0) - activeWo.targetLng,
+          );
+          return dA - dB;
+        })[0] ?? null
+      );
+    }
+
+    return (
+      candidatePool[0] ??
+      technicians.find((t) => t.lastLat !== null && t.lastLng !== null) ??
+      null
+    );
+  }, [mode, focusedTechId, activeWo, technicians]);
+
   // Resolve route origin and destination based on active mode
   const resolvedEndpoints = useMemo((): {
     origin: LatLng;
@@ -167,28 +274,18 @@ export function CaviteMapStage({
       };
     }
 
-    const activeWo = selectedWorkOrder ?? workOrders[0] ?? null;
     if (!activeWo) return null;
 
     if (mode === 'ops-fleet') {
-      const assignedTech = technicians.find(
-        (t) =>
-          t.userId === activeWo.assignedTechId &&
-          t.lastLat !== null &&
-          t.lastLng !== null,
-      );
-      const fallbackTech = technicians.find(
-        (t) =>
-          t.gpsFreshness !== 'OFFLINE' &&
-          t.lastLat !== null &&
-          t.lastLng !== null,
-      );
-      const sourceTech = assignedTech ?? fallbackTech;
-      if (!sourceTech || sourceTech.lastLat === null || sourceTech.lastLng === null) {
+      if (
+        !focusedTech ||
+        focusedTech.lastLat === null ||
+        focusedTech.lastLng === null
+      ) {
         return null;
       }
       return {
-        origin: { lat: sourceTech.lastLat, lng: sourceTech.lastLng },
+        origin: { lat: focusedTech.lastLat, lng: focusedTech.lastLng },
         target: { lat: activeWo.targetLat, lng: activeWo.targetLng },
       };
     }
@@ -197,14 +294,7 @@ export function CaviteMapStage({
       origin: navOrigin,
       target: { lat: activeWo.targetLat, lng: activeWo.targetLng },
     };
-  }, [
-    mode,
-    selectedDiscrepancy,
-    selectedWorkOrder,
-    workOrders,
-    technicians,
-    navOrigin,
-  ]);
+  }, [mode, selectedDiscrepancy, activeWo, focusedTech, navOrigin]);
 
   // Sync GeoJSON sources onto loaded MapLibre style with deduplicated setData
   const syncGeoJsonLayers = useCallback(
@@ -357,7 +447,7 @@ export function CaviteMapStage({
       container: containerRef.current,
       style: 'https://tiles.openfreemap.org/styles/liberty',
       center: initialCenter,
-      zoom: mode === 'ops-fleet' ? 12.6 : 16.2,
+      zoom: mode === 'ops-fleet' ? 14.2 : 16.2,
       maxBounds: CAVITE_BOUNDS.maxBoundsLngLat,
       pitch: mode === 'ops-fleet' ? 0 : 50,
       maxPitch: 56,
@@ -628,8 +718,9 @@ export function CaviteMapStage({
     }
   }, [camera3D, buildings3D]);
 
+  const originPrecision = mode === 'ops-fleet' ? 4 : 5;
   const endpointCoordKey = resolvedEndpoints
-    ? `${resolvedEndpoints.origin.lat.toFixed(5)},${resolvedEndpoints.origin.lng.toFixed(5)}->${resolvedEndpoints.target.lat.toFixed(5)},${resolvedEndpoints.target.lng.toFixed(5)}|${vehicleProfile}|${offlineMode}|${userBlocks.map((b) => b.id).join(';')}`
+    ? `${resolvedEndpoints.origin.lat.toFixed(originPrecision)},${resolvedEndpoints.origin.lng.toFixed(originPrecision)}->${resolvedEndpoints.target.lat.toFixed(5)},${resolvedEndpoints.target.lng.toFixed(5)}|${vehicleProfile}|${offlineMode}|${userBlocks.map((b) => b.id).join(';')}`
     : 'none';
 
   const resolvedEndpointsRef = useRef(resolvedEndpoints);
@@ -695,7 +786,8 @@ export function CaviteMapStage({
       setRouteResult(route);
       const step0 = route.steps[0];
       setHud({
-        instruction: step0?.instruction ?? 'Proceed along Cavite primary street route',
+        instruction:
+          step0?.instruction ?? 'Proceed along Cavite primary street route',
         street: `Current street: ${step0?.streetName || 'Cavite Arterial'} • ${route.engineName}`,
         distMeters: step0?.distanceMeters ?? route.distanceMeters,
         modifier: step0?.maneuverModifier || 'straight',
@@ -761,7 +853,7 @@ export function CaviteMapStage({
               const nowMs = Date.now();
               if (
                 onTelemetryPingRef.current &&
-                nowMs - lastPingSentMsRef.current > 3500
+                nowMs - lastPingSentMsRef.current > 1800
               ) {
                 lastPingSentMsRef.current = nowMs;
                 onTelemetryPingRef.current({
@@ -772,7 +864,11 @@ export function CaviteMapStage({
               }
             }
 
-            if (mapRef.current && camera3DRef.current && now - lastCameraUpdateRef.current >= 32) {
+            if (
+              mapRef.current &&
+              camera3DRef.current &&
+              now - lastCameraUpdateRef.current >= 32
+            ) {
               lastCameraUpdateRef.current = now;
               mapRef.current.jumpTo({
                 center: frame.camera.center,
@@ -822,14 +918,101 @@ export function CaviteMapStage({
     syncGeoJsonLayers,
   ]);
 
+  // Auto-frame the active technician -> work order corridor when selection or Focus Mode changes in ops-fleet
+  const selectionFocusKey =
+    mode === 'ops-fleet'
+      ? `${effectiveFocusMode ? 'focus' : 'all'}:${activeWo?.id ?? 'none'}:${focusedTech?.userId ?? 'none'}`
+      : 'other';
+
+  useEffect(() => {
+    if (mode !== 'ops-fleet') return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (!effectiveFocusMode) {
+      if (lastFocusedSelectionKeyRef.current !== selectionFocusKey) {
+        lastFocusedSelectionKeyRef.current = selectionFocusKey;
+        map.flyTo({ center: [120.942, 14.422], zoom: 12.6, duration: 450 });
+      }
+      return;
+    }
+
+    if (
+      lastFocusedSelectionKeyRef.current !== selectionFocusKey &&
+      resolvedEndpoints
+    ) {
+      const isInitialFrame = lastFocusedSelectionKeyRef.current === '';
+      lastFocusedSelectionKeyRef.current = selectionFocusKey;
+      const minLng = Math.min(
+        resolvedEndpoints.origin.lng,
+        resolvedEndpoints.target.lng,
+      );
+      const maxLng = Math.max(
+        resolvedEndpoints.origin.lng,
+        resolvedEndpoints.target.lng,
+      );
+      const minLat = Math.min(
+        resolvedEndpoints.origin.lat,
+        resolvedEndpoints.target.lat,
+      );
+      const maxLat = Math.max(
+        resolvedEndpoints.origin.lat,
+        resolvedEndpoints.target.lat,
+      );
+      const padLng = Math.max(0.0022, (maxLng - minLng) * 0.18);
+      const padLat = Math.max(0.0022, (maxLat - minLat) * 0.18);
+
+      map.fitBounds(
+        [
+          [minLng - padLng, minLat - padLat],
+          [maxLng + padLng, maxLat + padLat],
+        ],
+        {
+          padding: { top: 96, bottom: 78, left: 100, right: 64 },
+          maxZoom: 15.8,
+          duration: isInitialFrame ? 0 : 400,
+        },
+      );
+    }
+  }, [mode, effectiveFocusMode, selectionFocusKey, resolvedEndpoints]);
+
+  // Follow focused technician in real time when Follow Tech is enabled on ops-fleet map
+  useEffect(() => {
+    if (
+      mode !== 'ops-fleet' ||
+      !followTech ||
+      !focusedTech ||
+      focusedTech.lastLat === null ||
+      focusedTech.lastLng === null
+    ) {
+      return;
+    }
+    const map = mapRef.current;
+    if (!map) return;
+    map.easeTo({
+      center: [focusedTech.lastLng, focusedTech.lastLat],
+      zoom: Math.max(map.getZoom(), 15.4),
+      duration: 380,
+    });
+  }, [mode, followTech, focusedTech, focusedTech?.lastLat, focusedTech?.lastLng]);
+
   // Render NAP Boxes, Work Orders, Fleet Technicians, or Discrepancy Pins with Pooled Markers
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    // 1. NAP Split-Boxes
+    // 1. NAP Split-Boxes (filtered to serving NAP in Focus Mode)
+    const napsToPlot =
+      effectiveFocusMode && activeWo
+        ? napBoxes.filter(
+            (n) =>
+              n.id === activeWo.assignedNapBoxId ||
+              n.id === activeWo.oldNapBoxId,
+          )
+        : napBoxes;
+
     const currentNapIds = new Set<string>();
-    for (const nap of napBoxes) {
+    for (const nap of napsToPlot) {
       currentNapIds.add(nap.id);
       const freeCount = nap.ports.filter((p) => p.status === 'FREE').length;
       const text = `${nap.code} (${freeCount}/${nap.totalPorts})`;
@@ -905,10 +1088,14 @@ export function CaviteMapStage({
       return;
     }
 
-    // 3. Work Order Subscriber Pins
+    // 3. Work Order Subscriber Pins (filtered to selected work order in Focus Mode)
     const ordersToPlot =
       mode === 'ops-fleet'
-        ? workOrders
+        ? effectiveFocusMode
+          ? activeWo
+            ? [activeWo]
+            : []
+          : workOrders
         : selectedWorkOrder
           ? [selectedWorkOrder]
           : [];
@@ -916,7 +1103,7 @@ export function CaviteMapStage({
     const currentWoIds = new Set<string>();
     for (const wo of ordersToPlot) {
       currentWoIds.add(wo.id);
-      const isSelected = selectedWorkOrder?.id === wo.id;
+      const isSelected = activeWo?.id === wo.id;
       const color =
         wo.status === 'FB_ISSUE'
           ? '#ef4444'
@@ -926,15 +1113,21 @@ export function CaviteMapStage({
               ? '#10b981'
               : '#f97316';
 
+      const badgeLabel =
+        effectiveFocusMode && isSelected
+          ? `DEST • ${wo.ticketNumber} (${wo.targetBarangay})`
+          : null;
+
       const existing = woMarkersMapRef.current.get(wo.id);
       if (existing) {
         existing.setLngLat([wo.targetLng, wo.targetLat]);
         const el = existing.getElement();
         el.style.backgroundColor = color;
-        const innerSpan = el.firstElementChild as HTMLElement | null;
+        const innerSpan = el.querySelector('span') as HTMLElement | null;
         if (innerSpan) {
           innerSpan.style.transform = isSelected ? 'scale(1.2)' : 'scale(1)';
         }
+        syncMarkerBadge(el, badgeLabel, '#f97316');
       } else {
         const el = document.createElement('button');
         el.type = 'button';
@@ -956,6 +1149,7 @@ export function CaviteMapStage({
               ? 'T'
               : 'I';
         el.appendChild(woSpan);
+        syncMarkerBadge(el, badgeLabel, '#f97316');
         el.onclick = (ev) => {
           ev.stopPropagation();
           onSelectWorkOrder?.(wo.id);
@@ -978,18 +1172,34 @@ export function CaviteMapStage({
     if (mode === 'ops-fleet') {
       navMarkerRef.current?.remove();
       navMarkerRef.current = null;
+      const techsToPlot =
+        effectiveFocusMode && focusedTech ? [focusedTech] : technicians;
       const currentTechIds = new Set<string>();
-      for (const tech of technicians) {
+      for (const tech of techsToPlot) {
         if (tech.lastLat === null || tech.lastLng === null) continue;
         currentTechIds.add(tech.userId);
+        const isFocusedTech = focusedTech?.userId === tech.userId;
+        const techBadge =
+          effectiveFocusMode && isFocusedTech
+            ? `TECH • ${tech.fullName.split(' ')[0]} (${tech.lastSpeedKmh ?? 0} km/h)`
+            : null;
         const existing = techMarkersMapRef.current.get(tech.userId);
         if (existing) {
           existing.setLngLat([tech.lastLng, tech.lastLat]);
+          const el = existing.getElement();
+          el.title = `${tech.fullName} (${tech.gpsFreshness})`;
+          syncMarkerBadge(el, techBadge, '#38bdf8');
         } else {
           const el = document.createElement('div');
           el.className = 'fb-tech-puck';
+          el.style.cursor = 'pointer';
           el.title = `${tech.fullName} (${tech.gpsFreshness})`;
           el.innerHTML = buildTechPuckSvg(tech.vehicleType, tech.gpsFreshness);
+          syncMarkerBadge(el, techBadge, '#38bdf8');
+          el.onclick = (ev) => {
+            ev.stopPropagation();
+            onSelectTech?.(tech.userId);
+          };
           const m = new maplibregl.Marker({ element: el })
             .setLngLat([tech.lastLng, tech.lastLat])
             .addTo(map);
@@ -1029,6 +1239,9 @@ export function CaviteMapStage({
     }
   }, [
     mode,
+    effectiveFocusMode,
+    activeWo,
+    focusedTech,
     napBoxes,
     workOrders,
     selectedWorkOrder,
@@ -1038,6 +1251,7 @@ export function CaviteMapStage({
     navOrigin,
     isDriving,
     onSelectWorkOrder,
+    onSelectTech,
   ]);
 
   function startOrToggleDrive() {
@@ -1130,7 +1344,7 @@ export function CaviteMapStage({
 
       {/* Top-Left Tactical Turn-by-Turn / Mode HUD Banner */}
       <div
-        className="pointer-events-auto absolute left-3 top-3 z-10 flex max-w-[360px] items-center gap-3 rounded-xl border px-3.5 py-2.5 shadow-lg"
+        className="pointer-events-auto absolute left-3 top-3 z-10 flex max-w-[390px] items-center gap-3 rounded-xl border px-3.5 py-2.5 shadow-lg"
         style={{
           backgroundColor: 'var(--hud-glass)',
           borderColor: 'rgba(148, 163, 184, 0.25)',
@@ -1156,7 +1370,9 @@ export function CaviteMapStage({
           <div className="truncate text-xs text-slate-300">
             {mode === 'supervisor-diff' && selectedDiscrepancy
               ? `${selectedDiscrepancy.ticketNumber} • Blue = Trusted • Orange = Field`
-              : hud.street}
+              : mode === 'ops-fleet' && focusedTech && activeWo
+                ? `${focusedTech.fullName.split(' ')[0]} (${focusedTech.lastSpeedKmh ?? 0} km/h) → ${activeWo.ticketNumber} (${activeWo.targetBarangay})`
+                : hud.street}
           </div>
         </div>
         {mode !== 'supervisor-diff' && (
@@ -1166,7 +1382,7 @@ export function CaviteMapStage({
         )}
       </div>
 
-      {/* Top-Right Click Placement Controls */}
+      {/* Top-Right View & Click Placement Controls */}
       {mode !== 'supervisor-diff' && (
         <div
           className="pointer-events-auto absolute right-12 top-3 z-10 hidden sm:flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs shadow-lg"
@@ -1176,19 +1392,53 @@ export function CaviteMapStage({
             color: '#e2e8f0',
           }}
         >
-          <span className="text-[11px] text-slate-400 mr-1">Map click:</span>
+          {mode === 'ops-fleet' && (
+            <>
+              <button
+                type="button"
+                onClick={() => handleToggleFocusMode(true)}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-semibold transition-colors ${
+                  effectiveFocusMode
+                    ? 'bg-orange-500 text-slate-950'
+                    : 'bg-slate-800 text-slate-200'
+                }`}
+                title="Show only the selected work order, its assigned technician, and real-time routing"
+              >
+                <Eye className="h-3 w-3" aria-hidden="true" />
+                Focus Selected
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleFocusMode(false)}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium transition-colors ${
+                  !effectiveFocusMode
+                    ? 'bg-orange-500 text-slate-950 font-semibold'
+                    : 'bg-slate-800 text-slate-200'
+                }`}
+                title="Show all Cavite work orders, NAP boxes, and field technicians"
+              >
+                <Layers className="h-3 w-3" aria-hidden="true" />
+                All Fleet ({workOrders.length})
+              </button>
+              <span className="mx-0.5 h-3.5 w-px bg-slate-700" aria-hidden="true" />
+            </>
+          )}
+
           {mode === 'tech-navigation' && (
-            <button
-              type="button"
-              onClick={() => setClickAction('origin')}
-              className={`rounded-md px-2 py-1 font-medium ${
-                clickAction === 'origin'
-                  ? 'bg-orange-500 text-slate-950'
-                  : 'bg-slate-800 text-slate-200'
-              }`}
-            >
-              Origin
-            </button>
+            <>
+              <span className="text-[11px] text-slate-400 mr-1">Map click:</span>
+              <button
+                type="button"
+                onClick={() => setClickAction('origin')}
+                className={`rounded-md px-2 py-1 font-medium ${
+                  clickAction === 'origin'
+                    ? 'bg-orange-500 text-slate-950'
+                    : 'bg-slate-800 text-slate-200'
+                }`}
+              >
+                Origin
+              </button>
+            </>
           )}
           {onFieldPinCaptured && (
             <button
@@ -1258,9 +1508,7 @@ export function CaviteMapStage({
             <span className="font-mono-tabular text-amber-300">
               ETA {formatDuration(hud.etaSec)} •{' '}
               {formatMeters(routeResult.distanceMeters)}
-              {mode === 'tech-navigation'
-                ? ` • ${hud.speedKmh} km/h`
-                : ''}
+              {mode === 'tech-navigation' ? ` • ${hud.speedKmh} km/h` : ''}
             </span>
           )}
         </div>
@@ -1301,6 +1549,22 @@ export function CaviteMapStage({
                 <option value={10}>10x</option>
               </select>
             </>
+          )}
+
+          {mode === 'ops-fleet' && (
+            <button
+              type="button"
+              onClick={() => setFollowTech((v) => !v)}
+              className={`inline-flex items-center gap-1 rounded-md px-2 py-1.5 border ${
+                followTech
+                  ? 'border-orange-400 bg-orange-950/70 text-orange-200 font-semibold'
+                  : 'border-slate-700 bg-slate-800 text-slate-300'
+              }`}
+              title="Automatically follow the focused technician as live GPS updates arrive"
+            >
+              <LocateFixed className="h-3.5 w-3.5" aria-hidden="true" />
+              Follow Tech
+            </button>
           )}
 
           <button

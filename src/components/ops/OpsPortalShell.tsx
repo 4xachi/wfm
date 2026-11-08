@@ -79,8 +79,8 @@ export function OpsPortalShell({
         if (!prev) return data;
         const prevWos = prev.workOrders.map((w) => `${w.id}:${w.status}:${w.assignedTechId}`).join(';');
         const nextWos = data.workOrders.map((w) => `${w.id}:${w.status}:${w.assignedTechId}`).join(';');
-        const prevTech = prev.technicians.map((t) => `${t.userId}:${t.lastLat?.toFixed(4)}:${t.lastLng?.toFixed(4)}:${t.gpsFreshness}`).join(';');
-        const nextTech = data.technicians.map((t) => `${t.userId}:${t.lastLat?.toFixed(4)}:${t.lastLng?.toFixed(4)}:${t.gpsFreshness}`).join(';');
+        const prevTech = prev.technicians.map((t) => `${t.userId}:${t.lastLat?.toFixed(5)}:${t.lastLng?.toFixed(5)}:${t.lastSpeedKmh}:${t.gpsFreshness}`).join(';');
+        const nextTech = data.technicians.map((t) => `${t.userId}:${t.lastLat?.toFixed(5)}:${t.lastLng?.toFixed(5)}:${t.lastSpeedKmh}:${t.gpsFreshness}`).join(';');
         const prevNaps = prev.napBoxes.map((n) => `${n.id}:${n.ports.map((p) => p.status).join(',')}`).join(';');
         const nextNaps = data.napBoxes.map((n) => `${n.id}:${n.ports.map((p) => p.status).join(',')}`).join(';');
         const prevDiscr = prev.discrepancies.length;
@@ -93,10 +93,16 @@ export function OpsPortalShell({
       setUser((prev) => (prev?.id === data.user.id && prev?.role === data.user.role ? prev : data.user));
       setSelectedWorkOrderId((prev) => {
         if (prev && data.workOrders.some((w) => w.id === prev)) return prev;
-        const unassigned = data.workOrders.find(
-          (w) => w.status === 'UNASSIGNED',
+        const primaryDemoWo = data.workOrders.find(
+          (w) =>
+            w.ticketNumber === 'FB-WO-2026-1001' &&
+            (w.status === 'WORKING' || w.status === 'ASSIGNED'),
         );
-        return unassigned?.id ?? data.workOrders[0]?.id ?? null;
+        if (primaryDemoWo) return primaryDemoWo.id;
+        const activeAssigned = data.workOrders.find(
+          (w) => w.status === 'WORKING' || w.status === 'ASSIGNED',
+        );
+        return activeAssigned?.id ?? data.workOrders[0]?.id ?? null;
       });
     } catch {
       // Session expired or unauthorized

@@ -13,6 +13,10 @@ export interface CaviteMapStageProps {
   workOrders?: WorkOrderRecord[];
   selectedWorkOrder?: WorkOrderRecord | null;
   onSelectWorkOrder?: (workOrderId: string) => void;
+  focusedTechId?: string | null;
+  onSelectTech?: (techUserId: string | null) => void;
+  focusMode?: boolean;
+  onToggleFocusMode?: (next: boolean) => void;
   napBoxes?: NapBoxRecord[];
   technicians?: TechnicianTelemetryView[];
   selectedDiscrepancy?: LocationDiscrepancyRecord | null;
