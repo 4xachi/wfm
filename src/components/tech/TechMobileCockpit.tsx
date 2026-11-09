@@ -612,48 +612,40 @@ export function TechMobileCockpit({
 
               {activeJob && (
                 <div
-                  className="rounded-xl border p-3.5 space-y-2.5"
+                  className="rounded-xl border p-2.5 space-y-2"
                   style={{
                     backgroundColor: 'var(--bg-surface)',
                     borderColor: 'var(--border-subtle)',
                   }}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono-tabular text-xs font-bold">
-                      {activeJob.ticketNumber} • {activeJob.workflowType}
-                    </span>
-                    <span
-                      className="font-mono-tabular text-xs"
-                      style={{ color: 'var(--text-muted)' }}
+                    <div className="min-w-0 flex items-center gap-1.5 text-xs font-semibold truncate">
+                      <MapPin
+                        className="h-3.5 w-3.5 shrink-0"
+                        style={{ color: 'var(--accent-blaze)' }}
+                        aria-hidden="true"
+                      />
+                      <span className="font-mono-tabular font-bold shrink-0">
+                        {activeJob.ticketNumber}
+                      </span>
+                      <span className="truncate">
+                        • {activeJob.subscriberName} ({activeJob.targetBarangay},{' '}
+                        {activeJob.targetMunicipality})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('execute')}
+                      className="shrink-0 min-h-9 inline-flex items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-bold"
+                      style={{
+                        backgroundColor: 'var(--accent-blaze)',
+                        color: 'var(--accent-blaze-ink)',
+                      }}
                     >
-                      {activeJob.targetLat.toFixed(4)},{' '}
-                      {activeJob.targetLng.toFixed(4)}
-                    </span>
+                      <span>Execute</span>
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
                   </div>
-                  <div className="flex items-start gap-1.5 text-xs font-semibold">
-                    <MapPin
-                      className="h-4 w-4 mt-0.5 shrink-0"
-                      style={{ color: 'var(--accent-blaze)' }}
-                      aria-hidden="true"
-                    />
-                    <span>
-                      {activeJob.subscriberName} — {activeJob.targetAddress},
-                      Brgy. {activeJob.targetBarangay},{' '}
-                      {activeJob.targetMunicipality}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('execute')}
-                    className="w-full min-h-12 inline-flex items-center justify-center gap-2 rounded-lg px-4 text-xs font-bold"
-                    style={{
-                      backgroundColor: 'var(--accent-blaze)',
-                      color: 'var(--accent-blaze-ink)',
-                    }}
-                  >
-                    <span>Proceed to Field Execution</span>
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
                 </div>
               )}
             </div>

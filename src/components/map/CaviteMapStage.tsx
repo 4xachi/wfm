@@ -16,6 +16,9 @@ import {
   MapPin,
   Eye,
   Layers,
+  SlidersHorizontal,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import {
   CAVITE_BOUNDS,
@@ -235,6 +238,9 @@ export function CaviteMapStage({
 
   const [camera3D, setCamera3D] = useState(mode !== 'ops-fleet');
   const [buildings3D, setBuildings3D] = useState(mode !== 'ops-fleet');
+  const [hudControlsCollapsed, setHudControlsCollapsed] = useState(
+    mode === 'tech-navigation',
+  );
   const [internalFocusMode, setInternalFocusMode] = useState(true);
   const [followTech, setFollowTech] = useState(false);
   const [clickAction, setClickAction] = useState<'origin' | 'pin' | 'block'>(
@@ -1775,6 +1781,7 @@ export function CaviteMapStage({
     }
 
     setIsDriving(true);
+    setHudControlsCollapsed(true);
     lastFrameTimeRef.current = performance.now();
 
     const step = (now: number) => {
@@ -1849,7 +1856,7 @@ export function CaviteMapStage({
   return (
     <div
       className={`relative w-full overflow-hidden rounded-xl border ${
-        compactHeight ? 'h-[360px]' : 'h-[540px]'
+        compactHeight ? 'h-[430px]' : 'h-[540px]'
       }`}
       style={{
         borderColor: 'var(--border-subtle)',
@@ -1864,7 +1871,11 @@ export function CaviteMapStage({
 
       {/* Top-Left Tactical Turn-by-Turn / Mode HUD Banner */}
       <div
-        className="pointer-events-auto absolute left-3 top-3 z-10 flex max-w-[390px] items-center gap-3 rounded-xl border px-3.5 py-2.5 shadow-lg"
+        className={`pointer-events-auto absolute z-10 flex items-center rounded-xl border shadow-lg ${
+          mode === 'tech-navigation'
+            ? 'left-2.5 right-12 top-2.5 gap-2.5 px-2.5 py-1.5'
+            : 'left-3 top-3 max-w-[390px] gap-3 px-3.5 py-2.5'
+        }`}
         style={{
           backgroundColor: 'var(--hud-glass)',
           borderColor: 'rgba(148, 163, 184, 0.25)',
@@ -1872,22 +1883,31 @@ export function CaviteMapStage({
         }}
       >
         <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border"
+          className={`flex shrink-0 items-center justify-center rounded-lg border ${
+            mode === 'tech-navigation' ? 'h-8 w-8' : 'h-10 w-10'
+          }`}
           style={{
             backgroundColor: 'rgba(249, 115, 22, 0.18)',
             borderColor: '#f97316',
             color: '#fb923c',
           }}
         >
-          <TurnIcon className="h-5 w-5" aria-hidden="true" />
+          <TurnIcon
+            className={mode === 'tech-navigation' ? 'h-4 w-4' : 'h-5 w-5'}
+            aria-hidden="true"
+          />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold">
+          <div
+            className={`truncate font-semibold ${
+              mode === 'tech-navigation' ? 'text-xs sm:text-sm' : 'text-sm'
+            }`}
+          >
             {mode === 'supervisor-diff' && selectedDiscrepancy
               ? `GPS Pin Delta: ${selectedDiscrepancy.distanceMeters.toFixed(1)} m`
               : hud.instruction}
           </div>
-          <div className="truncate text-xs text-slate-300">
+          <div className="truncate text-[11px] text-slate-300">
             {mode === 'supervisor-diff' && selectedDiscrepancy
               ? `${selectedDiscrepancy.ticketNumber} • Blue = Trusted • Orange = Field`
               : mode === 'ops-fleet' && focusedTech && activeWo
@@ -1896,14 +1916,18 @@ export function CaviteMapStage({
           </div>
         </div>
         {mode !== 'supervisor-diff' && (
-          <div className="font-mono-tabular shrink-0 text-base font-bold text-white">
+          <div
+            className={`font-mono-tabular shrink-0 font-bold text-white ${
+              mode === 'tech-navigation' ? 'text-sm' : 'text-base'
+            }`}
+          >
             {formatMeters(hud.distMeters)}
           </div>
         )}
       </div>
 
-      {/* Top-Right View & Click Placement Controls */}
-      {mode !== 'supervisor-diff' && (
+      {/* Top-Right View & Click Placement Controls (ops-fleet only; tech-navigation places tools in collapsible drawer to avoid top overlap) */}
+      {mode === 'ops-fleet' && (
         <div
           className="pointer-events-auto absolute right-12 top-3 z-10 hidden sm:flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs shadow-lg"
           style={{
@@ -1912,54 +1936,33 @@ export function CaviteMapStage({
             color: '#e2e8f0',
           }}
         >
-          {mode === 'ops-fleet' && (
-            <>
-              <button
-                type="button"
-                onClick={() => handleToggleFocusMode(true)}
-                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-semibold transition-colors ${
-                  effectiveFocusMode
-                    ? 'bg-orange-500 text-slate-950'
-                    : 'bg-slate-800 text-slate-200'
-                }`}
-                title="Show only the selected work order, its assigned technician, and real-time routing"
-              >
-                <Eye className="h-3 w-3" aria-hidden="true" />
-                Focus Selected
-              </button>
-              <button
-                type="button"
-                onClick={() => handleToggleFocusMode(false)}
-                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium transition-colors ${
-                  !effectiveFocusMode
-                    ? 'bg-orange-500 text-slate-950 font-semibold'
-                    : 'bg-slate-800 text-slate-200'
-                }`}
-                title="Show all Cavite work orders, NAP boxes, and field technicians"
-              >
-                <Layers className="h-3 w-3" aria-hidden="true" />
-                All Fleet ({workOrders.length})
-              </button>
-              <span className="mx-0.5 h-3.5 w-px bg-slate-700" aria-hidden="true" />
-            </>
-          )}
-
-          {mode === 'tech-navigation' && (
-            <>
-              <span className="text-[11px] text-slate-400 mr-1">Map click:</span>
-              <button
-                type="button"
-                onClick={() => setClickAction('origin')}
-                className={`rounded-md px-2 py-1 font-medium ${
-                  clickAction === 'origin'
-                    ? 'bg-orange-500 text-slate-950'
-                    : 'bg-slate-800 text-slate-200'
-                }`}
-              >
-                Origin
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={() => handleToggleFocusMode(true)}
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-semibold transition-colors ${
+              effectiveFocusMode
+                ? 'bg-orange-500 text-slate-950'
+                : 'bg-slate-800 text-slate-200'
+            }`}
+            title="Show only the selected work order, its assigned technician, and real-time routing"
+          >
+            <Eye className="h-3 w-3" aria-hidden="true" />
+            Focus Selected
+          </button>
+          <button
+            type="button"
+            onClick={() => handleToggleFocusMode(false)}
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium transition-colors ${
+              !effectiveFocusMode
+                ? 'bg-orange-500 text-slate-950 font-semibold'
+                : 'bg-slate-800 text-slate-200'
+            }`}
+            title="Show all Cavite work orders, NAP boxes, and field technicians"
+          >
+            <Layers className="h-3 w-3" aria-hidden="true" />
+            All Fleet ({workOrders.length})
+          </button>
+          <span className="mx-0.5 h-3.5 w-px bg-slate-700" aria-hidden="true" />
           {onFieldPinCaptured && (
             <button
               type="button"
@@ -1998,56 +2001,27 @@ export function CaviteMapStage({
         </div>
       )}
 
-      {/* Bottom Legend & Camera / Simulation Dock */}
+      {/* Bottom Navigation Bar & Collapsible Controls Dock */}
       <div
-        className="pointer-events-auto absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs shadow-lg"
+        className={`pointer-events-auto absolute z-10 rounded-xl border text-xs shadow-lg ${
+          mode === 'tech-navigation'
+            ? 'bottom-2.5 left-2.5 right-2.5 px-2.5 py-1.5'
+            : 'bottom-3 left-3 right-3 px-3 py-2'
+        }`}
         style={{
           backgroundColor: 'var(--hud-glass)',
           borderColor: 'rgba(148, 163, 184, 0.25)',
           color: '#e2e8f0',
         }}
       >
-        <div className="flex flex-wrap items-center gap-3 text-[11px]">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-3.5 rounded-sm bg-orange-500" />
-            Fastest street route
-          </span>
-          <span className="hidden md:inline-flex items-center gap-1.5">
-            <span className="h-2 w-3.5 rounded-sm bg-sky-400" />
-            Alt route
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            3D buildings &amp; NAPs
-          </span>
-          <span className="hidden sm:inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-            Road block / GPS drift
-          </span>
-          {routeResult && mode !== 'supervisor-diff' && (
-            <span className="font-mono-tabular text-amber-300">
-              ETA {formatDuration(hud.etaSec)} •{' '}
-              {formatMeters(
-                hud.remainingDistMeters > 0
-                  ? hud.remainingDistMeters
-                  : routeResult.distanceMeters,
-              )}
-              {mode === 'tech-navigation'
-                ? ` • ${hud.speedKmh} km/h`
-                : displayedOpsSpeed > 0
-                  ? ` • ${displayedOpsSpeed} km/h`
-                  : ''}
-            </span>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {mode === 'tech-navigation' && (
-            <>
+        {/* Primary Compact Row: Always visible for instant 3D Drive + ETA + Collapse Toggle */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {mode === 'tech-navigation' && (
               <button
                 type="button"
                 onClick={startOrToggleDrive}
-                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-semibold bg-orange-500 text-slate-950"
+                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-semibold bg-orange-500 text-slate-950"
               >
                 {isDriving ? (
                   <>
@@ -2061,86 +2035,265 @@ export function CaviteMapStage({
                   </>
                 )}
               </button>
-              <select
-                aria-label="Simulation playback speed"
-                value={playbackSpeed}
-                onChange={(e) =>
-                  setPlaybackSpeed(
-                    Number(e.target.value) as PlaybackSpeedMultiplier,
-                  )
-                }
-                className="rounded-md bg-slate-800 px-2 py-1.5 font-mono-tabular text-xs text-white border border-slate-700"
-              >
-                <option value={1}>1x</option>
-                <option value={2}>2x</option>
-                <option value={5}>5x</option>
-                <option value={10}>10x</option>
-              </select>
-            </>
-          )}
+            )}
 
-          {mode === 'ops-fleet' && (
+            {routeResult && mode !== 'supervisor-diff' && (
+              <span className="font-mono-tabular text-[11px] sm:text-xs font-semibold text-amber-300">
+                ETA {formatDuration(hud.etaSec)} •{' '}
+                {formatMeters(
+                  hud.remainingDistMeters > 0
+                    ? hud.remainingDistMeters
+                    : routeResult.distanceMeters,
+                )}
+                {mode === 'tech-navigation'
+                  ? ` • ${hud.speedKmh} km/h`
+                  : displayedOpsSpeed > 0
+                    ? ` • ${displayedOpsSpeed} km/h`
+                    : ''}
+              </span>
+            )}
+
+            {!hudControlsCollapsed && mode !== 'tech-navigation' && (
+              <div className="hidden lg:flex flex-wrap items-center gap-3 text-[11px] text-slate-300">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-3.5 rounded-sm bg-orange-500" />
+                  Fastest street route
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-3.5 rounded-sm bg-sky-400" />
+                  Alt route
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  3D buildings &amp; NAPs
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                  Road block / GPS drift
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {mode !== 'tech-navigation' && !hudControlsCollapsed && (
+              <>
+                {mode === 'ops-fleet' && (
+                  <button
+                    type="button"
+                    onClick={() => setFollowTech((v) => !v)}
+                    className={`inline-flex items-center gap-1 rounded-md px-2 py-1 border ${
+                      followTech
+                        ? 'border-orange-400 bg-orange-950/70 text-orange-200 font-semibold'
+                        : 'border-slate-700 bg-slate-800 text-slate-300'
+                    }`}
+                    title="Automatically follow the focused technician as live GPS updates arrive"
+                  >
+                    <LocateFixed className="h-3.5 w-3.5" aria-hidden="true" />
+                    Follow Tech
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setCamera3D((v) => !v)}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 border ${
+                    camera3D
+                      ? 'border-sky-400 bg-sky-950/60 text-sky-200'
+                      : 'border-slate-700 bg-slate-800 text-slate-300'
+                  }`}
+                >
+                  <Compass className="h-3.5 w-3.5" aria-hidden="true" />
+                  3D Gimbal
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBuildings3D((v) => !v)}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 border ${
+                    buildings3D
+                      ? 'border-emerald-400 bg-emerald-950/60 text-emerald-200'
+                      : 'border-slate-700 bg-slate-800 text-slate-300'
+                  }`}
+                >
+                  <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  3D Bldgs
+                </button>
+
+                <button
+                  type="button"
+                  onClick={fitActiveRoute}
+                  className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-slate-200"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Fit route
+                </button>
+              </>
+            )}
+
             <button
               type="button"
-              onClick={() => setFollowTech((v) => !v)}
-              className={`inline-flex items-center gap-1 rounded-md px-2 py-1.5 border ${
-                followTech
-                  ? 'border-orange-400 bg-orange-950/70 text-orange-200 font-semibold'
-                  : 'border-slate-700 bg-slate-800 text-slate-300'
+              aria-expanded={!hudControlsCollapsed}
+              onClick={() => setHudControlsCollapsed((v) => !v)}
+              className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-semibold transition-colors ${
+                !hudControlsCollapsed
+                  ? 'border-orange-400 bg-orange-950/70 text-orange-200'
+                  : 'border-slate-700 bg-slate-800 text-slate-200'
               }`}
-              title="Automatically follow the focused technician as live GPS updates arrive"
+              title={
+                hudControlsCollapsed
+                  ? 'Expand map tools, camera controls, and legend'
+                  : 'Collapse map tools and legend for unobstructed road view'
+              }
             >
-              <LocateFixed className="h-3.5 w-3.5" aria-hidden="true" />
-              Follow Tech
+              <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{hudControlsCollapsed ? 'Controls' : 'Hide Controls'}</span>
+              {hudControlsCollapsed ? (
+                <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
             </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setCamera3D((v) => !v)}
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-1.5 border ${
-              camera3D
-                ? 'border-sky-400 bg-sky-950/60 text-sky-200'
-                : 'border-slate-700 bg-slate-800 text-slate-300'
-            }`}
-          >
-            <Compass className="h-3.5 w-3.5" aria-hidden="true" />
-            3D Gimbal
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setBuildings3D((v) => !v)}
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-1.5 border ${
-              buildings3D
-                ? 'border-emerald-400 bg-emerald-950/60 text-emerald-200'
-                : 'border-slate-700 bg-slate-800 text-slate-300'
-            }`}
-          >
-            <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
-            3D Bldgs
-          </button>
-
-          <button
-            type="button"
-            onClick={fitActiveRoute}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-200"
-          >
-            <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-            Fit route
-          </button>
-
-          {mode === 'tech-navigation' && (
-            <button
-              type="button"
-              onClick={centerActiveTechnician}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-200"
-            >
-              <LocateFixed className="h-3.5 w-3.5" aria-hidden="true" />
-              Center
-            </button>
-          )}
+          </div>
         </div>
+
+        {/* Collapsible Secondary Controls & Legend Drawer (tech-navigation) */}
+        {mode === 'tech-navigation' && !hudControlsCollapsed && (
+          <div className="mt-2 space-y-2 border-t border-slate-700/80 pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <select
+                  aria-label="Simulation playback speed"
+                  value={playbackSpeed}
+                  onChange={(e) =>
+                    setPlaybackSpeed(
+                      Number(e.target.value) as PlaybackSpeedMultiplier,
+                    )
+                  }
+                  className="rounded-md bg-slate-800 px-2 py-1 font-mono-tabular text-xs text-white border border-slate-700"
+                >
+                  <option value={1}>1x</option>
+                  <option value={2}>2x</option>
+                  <option value={5}>5x</option>
+                  <option value={10}>10x</option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => setCamera3D((v) => !v)}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 border ${
+                    camera3D
+                      ? 'border-sky-400 bg-sky-950/60 text-sky-200'
+                      : 'border-slate-700 bg-slate-800 text-slate-300'
+                  }`}
+                >
+                  <Compass className="h-3.5 w-3.5" aria-hidden="true" />
+                  3D Gimbal
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBuildings3D((v) => !v)}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 border ${
+                    buildings3D
+                      ? 'border-emerald-400 bg-emerald-950/60 text-emerald-200'
+                      : 'border-slate-700 bg-slate-800 text-slate-300'
+                  }`}
+                >
+                  <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  3D Bldgs
+                </button>
+
+                <button
+                  type="button"
+                  onClick={fitActiveRoute}
+                  className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-slate-200"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Fit route
+                </button>
+
+                <button
+                  type="button"
+                  onClick={centerActiveTechnician}
+                  className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-slate-200"
+                >
+                  <LocateFixed className="h-3.5 w-3.5" aria-hidden="true" />
+                  Center
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] text-slate-400">Map click:</span>
+                <button
+                  type="button"
+                  onClick={() => setClickAction('origin')}
+                  className={`rounded-md px-2 py-1 font-medium ${
+                    clickAction === 'origin'
+                      ? 'bg-orange-500 text-slate-950'
+                      : 'bg-slate-800 text-slate-200'
+                  }`}
+                >
+                  Origin
+                </button>
+                {onFieldPinCaptured && (
+                  <button
+                    type="button"
+                    onClick={() => setClickAction('pin')}
+                    className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium ${
+                      clickAction === 'pin'
+                        ? 'bg-orange-500 text-slate-950'
+                        : 'bg-slate-800 text-slate-200'
+                    }`}
+                  >
+                    <MapPin className="h-3 w-3" aria-hidden="true" />
+                    Capture Pin
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setClickAction('block')}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium ${
+                    clickAction === 'block'
+                      ? 'bg-red-500 text-white'
+                      : 'bg-slate-800 text-slate-200'
+                  }`}
+                >
+                  <Ban className="h-3 w-3" aria-hidden="true" />
+                  Block road
+                </button>
+                {userBlocks.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setUserBlocks([])}
+                    className="rounded-md bg-slate-700 px-2 py-1 font-mono-tabular text-[11px] text-amber-300"
+                  >
+                    Clear ({userBlocks.length})
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-300">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-3.5 rounded-sm bg-orange-500" />
+                Fastest street route
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-3.5 rounded-sm bg-sky-400" />
+                Alt route
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                3D buildings &amp; NAPs
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                Road block / GPS drift
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
