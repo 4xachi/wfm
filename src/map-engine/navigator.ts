@@ -479,9 +479,9 @@ export class NavigationController {
     );
 
     const targetBearing = matchResult.isSnapped
-      ? sliced.anticipatedBearing
+      ? sliced.bearing
       : filtered.bearing;
-    const headingRate = 1 - Math.exp(-Math.max(0.01, dtSeconds) * 9.0);
+    const headingRate = 1 - Math.exp(-Math.max(0.01, dtSeconds) * 18.0);
     this.currentBearing = lerpAngle(this.currentBearing, targetBearing, headingRate);
 
     const {
@@ -672,12 +672,12 @@ export class NavigationController {
         this.route.coordinates,
         this.cumDist,
         nextProgress,
-        false
+        true
       );
-      const headingRate = 1 - Math.exp(-dt * 9.0);
+      const headingRate = 1 - Math.exp(-dt * 18.0);
       this.currentBearing = lerpAngle(
         this.currentBearing,
-        fastSlice.anticipatedBearing,
+        fastSlice.bearing,
         headingRate
       );
       const speedKmh = Math.round(this.currentSpeedMps * 3.6);
@@ -721,9 +721,9 @@ export class NavigationController {
         confidence: prevMatch.confidence,
         confidencePercent: prevMatch.confidencePercent,
         viterbiCandidatesEvaluated: prevMatch.viterbiCandidatesEvaluated,
-        traveledCoords: null,
-        remainingCoords: null,
-        syncGeoJson: false,
+        traveledCoords: fastSlice.traveled,
+        remainingCoords: fastSlice.remaining,
+        syncGeoJson: true,
         currentStep: stepInfo.currentStep,
         nextStep: stepInfo.nextStep,
         stepAnnouncement: stepInfo.announcement,

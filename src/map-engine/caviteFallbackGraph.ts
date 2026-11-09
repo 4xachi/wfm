@@ -158,7 +158,14 @@ const GRAPH_EDGES: readonly CaviteGraphEdge[] = [
   // East-West Connectors in Bacoor / Imus / Dasmariñas
   { from: 'panapaan_niog', to: 'niog_molino_conn', streetName: 'Niog Road', highwayClass: 'municipal', speedKmh: 26 },
   { from: 'panapaan_niog', to: 'imus_noc_plaza', streetName: 'General Evangelista Street', highwayClass: 'municipal', speedKmh: 28 },
-  { from: 'imus_noc_plaza', to: 'imus_nueno', streetName: 'Nueno Avenue', highwayClass: 'municipal', speedKmh: 26 },
+  {
+    from: 'imus_noc_plaza',
+    to: 'imus_nueno',
+    streetName: 'Nueno Avenue',
+    highwayClass: 'municipal',
+    speedKmh: 26,
+    intermediatePoints: [[120.93787, 14.42703]],
+  },
   { from: 'imus_noc_plaza', to: 'tanzang_luma', streetName: 'General Castañeda Street', highwayClass: 'municipal', speedKmh: 25 },
   { from: 'imus_noc_plaza', to: 'lancaster_alapan', streetName: 'Alapan Road', highwayClass: 'municipal', speedKmh: 30 },
   { from: 'tanzang_luma', to: 'buhay_na_tubig', streetName: 'Tanzang Luma - Buhay na Tubig Road', highwayClass: 'municipal', speedKmh: 28 },

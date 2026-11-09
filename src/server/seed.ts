@@ -59,7 +59,7 @@ export function seedCaviteBaseline(db: DatabaseSync): {
     `);
 
     // Mateo: LIVE in Imus (L300 Splice Van)
-    insertTech.run('u-tech-1', 'l300_van', 'Imus • Nueno Ave', '0917-501-1101', 1, 14.4268, 120.9384, iso2MinAgo, 28);
+    insertTech.run('u-tech-1', 'l300_van', 'Imus • Nueno Ave', '0917-501-1101', 1, 14.42703, 120.93787, iso2MinAgo, 28);
     // Jessa: LIVE in Bacoor (2-Wheeler Troubleshooter)
     insertTech.run('u-tech-2', 'motorbike', 'Bacoor • SM Bacoor Hub', '0917-502-2202', 1, 14.4449, 120.9522, iso2MinAgo, 34);
     // Carlo: STALE (18 min old -> LAST KNOWN, never fake LIVE) in Dasmariñas

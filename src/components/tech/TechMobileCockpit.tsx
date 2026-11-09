@@ -115,6 +115,12 @@ export function TechMobileCockpit({
       }
       setSelectedJobId((prev) => {
         if (prev && data.workOrders.some((w) => w.id === prev)) return prev;
+        const primaryDemoWo = data.workOrders.find(
+          (w) =>
+            w.ticketNumber === 'FB-WO-2026-1001' &&
+            (w.status === 'WORKING' || w.status === 'ASSIGNED'),
+        );
+        if (primaryDemoWo) return primaryDemoWo.id;
         const firstActive =
           data.workOrders.find((w) => w.status === 'WORKING') ??
           data.workOrders.find((w) => w.status === 'ASSIGNED') ??

@@ -518,6 +518,84 @@ describe('Cavite 3D Map & Routing Engine (FiberBlaze FTTH WFM)', () => {
     }
   });
 
+  it('keeps vehicle bearing aligned straight along current road segment and trims remainingCoords on every frame', () => {
+    // Route going straight North (bearing 0 deg) for ~33m, then turning East (bearing 90 deg)
+    const coords: [number, number][] = [
+      [120.9384, 14.4268],
+      [120.9384, 14.4271], // ~33.3m North
+      [120.9390, 14.4271], // ~64.7m East
+    ];
+    const cum = computeCumulativeDistances(coords);
+    const totalDist = cum[cum.length - 1];
+
+    const nav = new NavigationController();
+    nav.setRoute({
+      profile: 'l300_van',
+      distanceMeters: totalDist,
+      durationSeconds: 20,
+      coordinates: coords,
+      steps: [
+        {
+          index: 0,
+          legIndex: 0,
+          instruction: 'Head north',
+          verbalInstruction: 'Head north',
+          streetName: 'Nueno Avenue',
+          maneuverType: 'depart',
+          maneuverModifier: 'straight',
+          bearingAfter: 0,
+          distanceMeters: cum[1],
+          durationSeconds: 8,
+          startDistanceMeters: 0,
+          endDistanceMeters: cum[1],
+          location: coords[0],
+        },
+        {
+          index: 1,
+          legIndex: 0,
+          instruction: 'Turn right',
+          verbalInstruction: 'Turn right',
+          streetName: 'Castañeda Street',
+          maneuverType: 'turn',
+          maneuverModifier: 'right',
+          bearingAfter: 90,
+          distanceMeters: totalDist - cum[1],
+          durationSeconds: 12,
+          startDistanceMeters: cum[1],
+          endDistanceMeters: totalDist,
+          location: coords[1],
+        },
+      ],
+    });
+
+    // Advance in small 16ms frames while still on the first North-bound road segment (~18m in, ~15m before turn)
+    let lastFrame = null;
+    for (let i = 0; i < 12; i++) {
+      lastFrame = nav.advanceSimulation(0.016, 2, 0);
+      expect(lastFrame).not.toBeNull();
+      // Every frame (including fast frames) must provide remainingCoords starting at the vehicle's current position
+      expect(lastFrame!.remainingCoords).not.toBeNull();
+      expect(lastFrame!.remainingCoords!.length).toBeGreaterThanOrEqual(2);
+      expect(lastFrame!.remainingCoords![0][0]).toBeCloseTo(lastFrame!.displayPoint.lng, 5);
+      expect(lastFrame!.remainingCoords![0][1]).toBeCloseTo(lastFrame!.displayPoint.lat, 5);
+    }
+
+    // Ingest telemetry at 20m progress (still 13m before the corner on the straight North segment)
+    const midNorth = interpolateAlongRoute(coords, cum, 20, true);
+    const midFrame = nav.ingestTelemetry({
+      lat: midNorth.point.lat,
+      lng: midNorth.point.lng,
+      bearing: 0,
+      speedMps: 8,
+      trueProgressMeters: 20,
+      dtSeconds: 0.2,
+    });
+    expect(midFrame).not.toBeNull();
+    // Vehicle must still point straight North along the road segment (within 2 deg of 0/360), not sideways toward the upcoming East turn
+    const normalizedBrg = midFrame!.bearing > 180 ? 360 - midFrame!.bearing : midFrame!.bearing;
+    expect(normalizedBrg).toBeLessThan(2);
+  });
+
   it('contains zero forbidden food-delivery terms anywhere in src/map-engine/', () => {
     const engineDir = path.resolve(__dirname, '../../src/map-engine');
     const files = fs.readdirSync(engineDir).filter((f) => f.endsWith('.ts'));
